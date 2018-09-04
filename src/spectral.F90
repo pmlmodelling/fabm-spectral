@@ -14,7 +14,7 @@ module fabm_spectral
 
    type,extends(type_base_model), public :: type_spectral
       type (type_horizontal_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_O3, id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf
-      type (type_horizontal_dependency_id) :: id_lon, id_lat, id_cloud, id_wind_speed
+      type (type_horizontal_dependency_id) :: id_lon, id_lat, id_cloud, id_wind_speed, id_airpres
       type (type_global_dependency_id) :: id_yearday
       type (type_dependency_id) :: id_h
       integer :: nlambda
@@ -73,12 +73,12 @@ contains
       ! This enables runtime interpolation in second dimension (zenith angle).
       c = reshape(c, (/nlambda_bird, 7/), order=(/2, 1/))
    end subroutine initialize_module
-    
+
    subroutine initialize(self,configunit)
       class (type_spectral), intent(inout), target :: self
       integer,               intent(in)            :: configunit
 
-      integer :: i
+      integer :: l
       real(rk) :: lambda_min, lambda_max
       logical :: save_spectra
       character(len=8) :: strwavelength
@@ -89,8 +89,8 @@ contains
       call self%get_parameter(lambda_min, 'lambda_min', 'nm', 'minimum wavelength')
       call self%get_parameter(lambda_max, 'lambda_max', 'nm', 'maximum wavelength')
       allocate(self%lambda(self%nlambda))
-      do i = 1, self%nlambda
-         self%lambda(i) = lambda_min + (i - 1) * (lambda_max - lambda_min) / (self%nlambda - 1)
+      do l = 1, self%nlambda
+         self%lambda(l) = lambda_min + (l - 1) * (lambda_max - lambda_min) / (self%nlambda - 1)
       end do
       call self%get_parameter(save_spectra, 'save_spectra', '', 'save full spectral irradiance', default=.false.)
 
@@ -106,14 +106,15 @@ contains
       call self%register_dependency(self%id_lat, standard_variables%latitude)
       call self%register_dependency(self%id_wind_speed, standard_variables%wind_speed)
       call self%register_dependency(self%id_cloud, standard_variables%cloud_area_fraction)
+      call self%register_dependency(self%id_airpres, standard_variables%surface_air_pressure)
       call self%register_dependency(self%id_yearday, standard_variables%number_of_days_since_start_of_the_year)
       call self%register_dependency(self%id_h, standard_variables%cell_thickness)
-      
+
       call self%register_diagnostic_variable(self%id_swr, 'swr',     'W/m^2',     'shortwave radiation')
       call self%register_diagnostic_variable(self%id_uv,  'uv',      'W/m^2',     'ultraviolet radiative flux')
       call self%register_diagnostic_variable(self%id_par, 'par',     'W/m^2',     'photosynthetically active radiation')
       call self%register_diagnostic_variable(self%id_par_E, 'par_E', 'umol/m^2/s','photosynthetic photon flux density')
-      call self%register_diagnostic_variable(self%id_swr_sf, 'swe_sf',     'W/m^2',     'downward shortwave radiation in air')
+      call self%register_diagnostic_variable(self%id_swr_sf, 'swr_sf',     'W/m^2',     'downward shortwave radiation in air')
       call self%register_diagnostic_variable(self%id_uv_sf,  'uv_sf',      'W/m^2',     'downward ultraviolet radiative flux in air')
       call self%register_diagnostic_variable(self%id_par_sf, 'par_sf',     'W/m^2',     'downward photosynthetically active radiation in air')
       call self%register_diagnostic_variable(self%id_par_E_sf, 'par_E_sf', 'umol/m^2/s','downward photosynthetic photon flux density in air')
@@ -124,16 +125,16 @@ contains
          allocate(self%id_surface_band_dif(self%nlambda))
          allocate(self%id_band_dir(self%nlambda))
          allocate(self%id_band_dif(self%nlambda))
-         do i = 1, self%nlambda
-            if (self%lambda(i) < 1000._rk) then
-               write(strwavelength, '(f5.1)') self%lambda(i)
+         do l = 1, self%nlambda
+            if (self%lambda(l) < 1000._rk) then
+               write(strwavelength, '(f5.1)') self%lambda(l)
             else
-               write(strwavelength, '(f6.1)') self%lambda(i)
+               write(strwavelength, '(f6.1)') self%lambda(l)
             end if
-            call self%register_diagnostic_variable(self%id_surface_band_dir(i), 'irradiance_dir_sf_' // trim(strwavelength), 'W/m2/nm', 'direct surface irradiance @ ' // trim(strwavelength) // ' nm')
-            call self%register_diagnostic_variable(self%id_surface_band_dif(i), 'irradiance_dif_sf_' // trim(strwavelength), 'W/m2/nm', 'diffuse surface irradiance @ ' // trim(strwavelength) // ' nm')
-            call self%register_diagnostic_variable(self%id_band_dir(i), 'irradiance_dir_' // trim(strwavelength), 'W/m2/nm', 'direct irradiance @ ' // trim(strwavelength) // ' nm')
-            call self%register_diagnostic_variable(self%id_band_dif(i), 'irradiance_dif_' // trim(strwavelength), 'W/m2/nm', 'diffuse irradiance @ ' // trim(strwavelength) // ' nm')
+            call self%register_diagnostic_variable(self%id_surface_band_dir(l), 'irradiance_dir_sf_' // trim(strwavelength), 'W/m2/nm', 'direct surface irradiance @ ' // trim(strwavelength) // ' nm')
+            call self%register_diagnostic_variable(self%id_surface_band_dif(l), 'irradiance_dif_sf_' // trim(strwavelength), 'W/m2/nm', 'diffuse surface irradiance @ ' // trim(strwavelength) // ' nm')
+            call self%register_diagnostic_variable(self%id_band_dir(l), 'irradiance_dir_' // trim(strwavelength), 'W/m2/nm', 'direct irradiance @ ' // trim(strwavelength) // ' nm')
+            call self%register_diagnostic_variable(self%id_band_dif(l), 'irradiance_dif_' // trim(strwavelength), 'W/m2/nm', 'diffuse irradiance @ ' // trim(strwavelength) // ' nm')
          end do
       end if
    end subroutine initialize
@@ -147,6 +148,7 @@ contains
 
       real(rk), parameter :: W0 = 0.928_rk  ! Single scattering albedo of the aerosol (Bird 1984 Eq 15)
       real(rk), parameter :: fa = 0.82_rk   ! Forward to total scattering ratio of the aerosol (Bird 1984 Eq 15)
+      real(rk), parameter :: pres0 = 1013._rk ! reference air pressure in mbar (Bird 1984 p461, Bird & Riordan p89)
 
       ! Exter_rk,  mean irradiance at the top of the atmosphere (i.e. includes correction for Earth-sun distance and eccentricity; Table 1_rk,  Bird 1984)
       real(rk), parameter :: exter(nlambda_bird) = (/535.9_rk, 558.3_rk, 622._rk, 692.7_rk, 715.1_rk, 832.9_rk, 961.9_rk, 931.9_rk, 900.6_rk, 911.3_rk, 975.5_rk, 975.9_rk, 1119.9_rk, 1103.8_rk, 1033.8_rk,  &
@@ -162,7 +164,7 @@ contains
       real(rk), parameter :: lightspeed = 299792458_rk   ! Speed of light (m/s)
       real(rk), parameter :: Avogadro = 6.02214129e23_rk ! Avogadro constant (/mol)
       
-      real(rk) :: longitude, latitude, yearday, cloud_cover, wind_speed
+      real(rk) :: longitude, latitude, yearday, cloud_cover, wind_speed, pres
       real(rk) :: days, hour, zen, sunbet
       real(rk) :: toz(nlambda_bird), tw(nlambda_bird), ta(nlambda_bird), tr(nlambda_bird), tu(nlambda_bird)
       integer :: l
@@ -171,13 +173,14 @@ contains
                   dif(nlambda_bird), foam, cdrag, b, dirspec, difspec, zenw
       real(rk), dimension(self%nlambda) :: direct, diffuse, spectrum  ! Spectra at top of the water column (with refraction and reflection accounted for)
       real(rk) :: par_J, swr_J, uv_J, par_E
-      
+
       _HORIZONTAL_LOOP_BEGIN_
           _GET_HORIZONTAL_(self%id_lon, longitude)
           _GET_HORIZONTAL_(self%id_lat, latitude)
           _GET_GLOBAL_(self%id_yearday, yearday)
           _GET_HORIZONTAL_(self%id_cloud, cloud_cover)      ! Cloud cover (fraction, 0-1)
           _GET_HORIZONTAL_(self%id_wind_speed, wind_speed)  ! Wind speed @ 10 m above surface (m/s)
+          _GET_HORIZONTAL_(self%id_airpres, pres)  ! Wind speed @ 10 m above surface (m/s)
 
           days = floor(yearday) + 1.0_rk
           hour = mod(yearday, 1.0_rk) * 24.0_rk
@@ -203,6 +206,7 @@ contains
           ! Calculate relative air mass (atmospheric path length)
           airmass = 1._rk/(cos(zen) + 0.15_rk*(93.885_rk - zend)**(-1.253_rk))          ! Eq 3 Bird 1984, Eq 5 Bird & Riordan 1986, Eq 13 Gregg & Carder 1990 note this is not pressure corrected.  
           if (airmass < 1._rk) airmass = 1._rk
+          airmass = airmass * pres/100/pres0 ! NB converting surface pressure "pres" from Pa to mbar
 
           call calculate_atmospheric_transmittance(airmass, zen, O3, toz, tw, ta, tr, tu)
 
@@ -214,7 +218,7 @@ contains
           ! Diffuse Irradiance
 
           ! Interpolating diffuse correction factor for the zenith angle of interest
-          call interp(nlambda_bird,7,cd,c,zend,c2)
+          call interp(nlambda_bird, 7, cd, c, zend, c2)
 
           ! Calculating total diffuse irradiance (following Bird 1984: assumes independent scattering which results in underestimation of scattered irradiance at Z>60°, Bird and Riordan 1986)             
           do l = 1, nlambda_bird                                    
@@ -261,12 +265,12 @@ contains
           end if
 
           ! Direct light specular component
-          if (zend>=40._rk .and. wind_speed>2._rk) then
-             b = -7.14e-4_rk*wind_speed + 0.0618_rk            ! Eq 47 Gregg and Carder 1990
-             dirspec =  0.0253_rk * exp(b*(zend-40._rk))       ! Eq 46 Gregg and Carder 1990
+          if (zend >= 40._rk .and. wind_speed > 2._rk) then
+             b = -7.14e-4_rk * wind_speed + 0.0618_rk              ! Eq 47 Gregg and Carder 1990
+             dirspec =  0.0253_rk * exp(b * (zend - 40._rk))       ! Eq 46 Gregg and Carder 1990
           else
              ! Reflectance according to Fresnel's Law
-             dirspec = 0.5_rk*(sin(zen-zenw)**2/sin(zen+zenw)**2 + tan(zen-zenw)**2/tan(zen+zenw)**2) ! Eq 44 Gregg and Carder 1990 - note: contains typo (internal 1/2), see Kirk 3rd ed 2011, p 46
+             dirspec = 0.5_rk * (sin(zen - zenw)**2 / sin(zen + zenw)**2 + tan(zen - zenw)**2 / tan(zen + zenw)**2) ! Eq 44 Gregg and Carder 1990 - note: contains typo (internal 1/2), see Kirk 3rd ed 2011, p 46
           end if 
 
           ! Diffuse light specular component
@@ -278,8 +282,8 @@ contains
 
           ! Apply reflection
           do l = 1, self%nlambda
-             direct(l)  = direct(l) *(1._rk - (dirspec + foam))
-             diffuse(l) = diffuse(l)*(1._rk - (difspec + foam))
+             direct(l)  = direct(l) * (1._rk - (dirspec + foam))
+             diffuse(l) = diffuse(l) * (1._rk - (difspec + foam))
           end do
 
           if (allocated(self%id_surface_band_dir)) then
@@ -307,12 +311,12 @@ contains
       integer,  intent(in)  :: n
       real(rk), intent(in)  :: x(n), xl, xr
       real(rk), intent(out) :: w(n)
-      
+
       integer  :: i
       real(rk) :: deltax, f
-      
+
       w = 0._rk
-      
+
       if (x(1) > xr) then
          ! All points to right of desired range.
          w(1) = xr - xl
@@ -322,7 +326,7 @@ contains
          w(n) =  xr - xl
          return
       end if
-      
+
       do i = 2, n
          deltax = x(i) - x(i-1)
          if (x(i) >= xl .and. x(i) <= xr) then
@@ -434,8 +438,8 @@ contains
          0._rk, 0._rk, 0._rk, 0._rk, 0._rk, 0.15_rk, 0._rk/)
 
       ! A) Raleigh scattering
-      do L = 1,nlambda_bird
-         tr(L) = exp(-airmass/(115.6406_rk*lampth(L)**4 - 1.335_rk*lampth(L)**2))   ! Eq 2 Bird 1984, Eq 4 Bird & Riordan 1986, Eq 15 Gregg & Carder 1990
+      do l = 1, nlambda_bird
+         tr(l) = exp(-airmass / (115.6406_rk * lampth(l)**4 - 1.335_rk * lampth(l)**2))   ! Eq 2 Bird 1984, Eq 4 Bird & Riordan 1986, Eq 15 Gregg & Carder 1990
       end do   
 
       ! B) Aerosol scattering and absorption
@@ -456,9 +460,9 @@ contains
 
       ! Ozone
       !mo = 35._rk/sqrt(1224._rk*cos(zen)**2 + 1._rk)               ! Eq 9, Bird 1984 
-      mo = (1._rk + ho/6370._rk)/sqrt(cos(zen)**2 + 2*ho/6370._rk) ! Eq 10, Bird & Riordan 1986, Eq 14 Gregg & Carder 1990; NB 6370 is the earth's radius in km
-      do L = 1, nlambda_bird
-         toz(L) = exp(-ao(L)*O3*mo)                                ! Eq 8 Bird 1984, Eq 9 Bird & Riordan 1986, Eq 17 Gregg & Carder 1990
+      mo = (1._rk + ho/6370._rk)/sqrt(cos(zen)**2 + 2*ho/6370._rk)  ! Eq 10, Bird & Riordan 1986, Eq 14 Gregg & Carder 1990; NB 6370 is the earth's radius in km
+      do l = 1, nlambda_bird
+         toz(l) = exp(-ao(l) * O3 * mo)                             ! Eq 8 Bird 1984, Eq 9 Bird & Riordan 1986, Eq 17 Gregg & Carder 1990
       end do   
 
       ! Uniformly mixed gas   
@@ -510,7 +514,7 @@ contains
          H = H_S
          I = I_S
       end if
-      
+
       ! Van Heuklon (1979), Eq 4 - note conversion from degrees to radians
       O3 = J + (A + C*sin(D*(E+F)*deg2rad) + G*sin(H*(lambda+I)*deg2rad))*sin(beta*phi*deg2rad)**2
    end function
