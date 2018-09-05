@@ -114,10 +114,10 @@ contains
       call self%register_diagnostic_variable(self%id_uv,  'uv',      'W/m^2',     'ultraviolet radiative flux')
       call self%register_diagnostic_variable(self%id_par, 'par',     'W/m^2',     'photosynthetically active radiation')
       call self%register_diagnostic_variable(self%id_par_E, 'par_E', 'umol/m^2/s','photosynthetic photon flux density')
-      call self%register_diagnostic_variable(self%id_swr_sf, 'swr_sf',     'W/m^2',     'downward shortwave radiation in air')
-      call self%register_diagnostic_variable(self%id_uv_sf,  'uv_sf',      'W/m^2',     'downward ultraviolet radiative flux in air')
-      call self%register_diagnostic_variable(self%id_par_sf, 'par_sf',     'W/m^2',     'downward photosynthetically active radiation in air')
-      call self%register_diagnostic_variable(self%id_par_E_sf, 'par_E_sf', 'umol/m^2/s','downward photosynthetic photon flux density in air')
+      call self%register_diagnostic_variable(self%id_swr_sf, 'swr_sf',     'W/m^2',     'net shortwave radiation in air')
+      call self%register_diagnostic_variable(self%id_uv_sf,  'uv_sf',      'W/m^2',     'net ultraviolet radiative flux in air')
+      call self%register_diagnostic_variable(self%id_par_sf, 'par_sf',     'W/m^2',     'net photosynthetically active radiation in air')
+      call self%register_diagnostic_variable(self%id_par_E_sf, 'par_E_sf', 'umol/m^2/s','net photosynthetic photon flux density in air')
       call self%register_diagnostic_variable(self%id_O3, 'O3', 'atm cm', 'atmospheric ozone concentration')
 
       if (save_spectra) then
@@ -131,8 +131,8 @@ contains
             else
                write(strwavelength, '(f6.1)') self%lambda(l)
             end if
-            call self%register_diagnostic_variable(self%id_surface_band_dir(l), 'irradiance_dir_sf_' // trim(strwavelength), 'W/m2/nm', 'direct surface irradiance @ ' // trim(strwavelength) // ' nm')
-            call self%register_diagnostic_variable(self%id_surface_band_dif(l), 'irradiance_dif_sf_' // trim(strwavelength), 'W/m2/nm', 'diffuse surface irradiance @ ' // trim(strwavelength) // ' nm')
+            call self%register_diagnostic_variable(self%id_surface_band_dir(l), 'irradiance_dir_sf_' // trim(strwavelength), 'W/m2/nm', 'net direct irradiance in air @ ' // trim(strwavelength) // ' nm')
+            call self%register_diagnostic_variable(self%id_surface_band_dif(l), 'irradiance_dif_sf_' // trim(strwavelength), 'W/m2/nm', 'net diffuse irradiance in air @ ' // trim(strwavelength) // ' nm')
             call self%register_diagnostic_variable(self%id_band_dir(l), 'irradiance_dir_' // trim(strwavelength), 'W/m2/nm', 'direct irradiance @ ' // trim(strwavelength) // ' nm')
             call self%register_diagnostic_variable(self%id_band_dif(l), 'irradiance_dif_' // trim(strwavelength), 'W/m2/nm', 'diffuse irradiance @ ' // trim(strwavelength) // ' nm')
          end do
@@ -149,6 +149,7 @@ contains
       real(rk), parameter :: W0 = 0.928_rk  ! Single scattering albedo of the aerosol (Bird 1984 Eq 15)
       real(rk), parameter :: fa = 0.82_rk   ! Forward to total scattering ratio of the aerosol (Bird 1984 Eq 15)
       real(rk), parameter :: pres0 = 1013._rk ! reference air pressure in mbar (Bird 1984 p461, Bird & Riordan p89)
+      real(rk), parameter :: ga = 0.05_rk ! ground albedo
 
       ! Exter_rk,  mean irradiance at the top of the atmosphere (i.e. includes correction for Earth-sun distance and eccentricity; Table 1_rk,  Bird 1984)
       real(rk), parameter :: exter(nlambda_bird) = (/535.9_rk, 558.3_rk, 622._rk, 692.7_rk, 715.1_rk, 832.9_rk, 961.9_rk, 931.9_rk, 900.6_rk, 911.3_rk, 975.5_rk, 975.9_rk, 1119.9_rk, 1103.8_rk, 1033.8_rk,  &
@@ -169,7 +170,7 @@ contains
       real(rk) :: toz(nlambda_bird), tw(nlambda_bird), ta(nlambda_bird), tr(nlambda_bird), tu(nlambda_bird)
       integer :: l
       real(rk) :: zend, airmass, ros(nlambda_bird), dir(nlambda_bird), &
-                  c2(nlambda_bird), xx, Ir, Ia, O3, &
+                  c2(nlambda_bird), xx, Ir, Ia, Ig, O3, &
                   dif(nlambda_bird), foam, cdrag, b, dirspec, difspec, zenw
       real(rk), dimension(self%nlambda) :: direct, diffuse, spectrum  ! Spectra at top of the water column (with refraction and reflection accounted for)
       real(rk) :: par_J, swr_J, uv_J, par_E
@@ -180,7 +181,7 @@ contains
           _GET_GLOBAL_(self%id_yearday, yearday)
           _GET_HORIZONTAL_(self%id_cloud, cloud_cover)      ! Cloud cover (fraction, 0-1)
           _GET_HORIZONTAL_(self%id_wind_speed, wind_speed)  ! Wind speed @ 10 m above surface (m/s)
-          _GET_HORIZONTAL_(self%id_airpres, pres)  ! Wind speed @ 10 m above surface (m/s)
+          _GET_HORIZONTAL_(self%id_airpres, pres)           ! Surface air pressure (Pa)
 
           days = floor(yearday) + 1.0_rk
           hour = mod(yearday, 1.0_rk) * 24.0_rk
@@ -188,7 +189,7 @@ contains
           ! Calculate zenith angle and solar noon altitude (both in radians)
           call solar_angles(days, hour, longitude, latitude, zen, sunbet)
 
-          zen = min(zen, 0.5_rk*pi)  ! Restrict the input zenith angle between 0 and pi/2
+          zen = min(zen, 0.5_rk * pi)  ! Restrict the input zenith angle between 0 and pi/2
           zend = zen * 180._rk / pi 
 
           ! Bird 1984 p 466 reports O3=0.344 atm-cm. We use Van Heuklon (1979) to account for seasonal and geographical variation.
@@ -197,14 +198,14 @@ contains
 
           ! Compute transmittance at relative air mass of 1.9
           call calculate_atmospheric_transmittance(1.9_rk, zen, O3, toz, tw, ta, tr, tu)         ! Following transmissivities sufficient for near-UV and visible wavelengths (Gregg and Carder, 1990)
-
+          
           ! Calculate rho_s (air albedo)
           do l = 1, nlambda_bird
              ros(l) = toz(l) * tu(l) * tw(l) * (ta(l) * (1._rk - tr(l)) * 0.5_rk + tr(l) * (1._rk - ta(l)) * 0.22_rk * W0)      ! Eq (15) Bird 1984
           end do
 
           ! Calculate relative air mass (atmospheric path length)
-          airmass = 1._rk/(cos(zen) + 0.15_rk*(93.885_rk - zend)**(-1.253_rk))          ! Eq 3 Bird 1984, Eq 5 Bird & Riordan 1986, Eq 13 Gregg & Carder 1990 note this is not pressure corrected.  
+          airmass = 1._rk / (cos(zen) + 0.15_rk * (93.885_rk - zend)**(-1.253_rk))          ! Eq 3 Bird 1984, Eq 5 Bird & Riordan 1986, Eq 13 Gregg & Carder 1990 note this is not pressure corrected.  
           if (airmass < 1._rk) airmass = 1._rk
           airmass = airmass * pres/100/pres0 ! NB converting surface pressure "pres" from Pa to mbar
 
@@ -212,8 +213,8 @@ contains
 
           ! Total Direct Normal Irradiance
           do L = 1, nlambda_bird
-             dir(L) = exter(L) * tr(L) * ta(L) * tw(L) * toz(L) * tu(L)         ! Eq (1) Bird 1984, Calculating total direct normal irradiance from extraterrestrial irradiance and transmissivities at 24 wavelengths.
-          end do                                                      
+             dir(l) = exter(l) * tr(l) * ta(l) * tw(l) * toz(l) * tu(l)         ! Eq (1) Bird 1984, Calculating total direct normal irradiance from extraterrestrial irradiance and transmissivities at 24 wavelengths.
+          end do
 
           ! Diffuse Irradiance
 
@@ -221,14 +222,15 @@ contains
           call interp(nlambda_bird, 7, cd, c, zend, c2)
 
           ! Calculating total diffuse irradiance (following Bird 1984: assumes independent scattering which results in underestimation of scattered irradiance at Z>60°, Bird and Riordan 1986)             
-          do l = 1, nlambda_bird                                    
+          do l = 1, nlambda_bird
              xx = exter(l) * cos(zen) * toz(l) * tw(l) * tu(l)                    
-             Ir = xx * ta(l) * (1._rk-tr(l)) * 0.5_rk                   ! Eq (12) Bird 1984
-             Ia = xx * tr(l) * (1._rk-ta(l)) * W0 * fa                  ! Eq (13) Bird 1984
+             Ir = xx * ta(l) * (1._rk - tr(l)) * 0.5_rk                   ! Eq (12) Bird 1984
+             Ia = xx * tr(l) * (1._rk - ta(l)) * W0 * fa                  ! Eq (13) Bird 1984
 
              ! Removed Eq (14) Bird 1984: set to zero in Greg and Carder 90 text p1661 (makes no difference to rms)
+             Ig = (dir(l) * cos(zen) + (Ir + Ia) * c2(l)) * ros(l) * ga / (1.D0 - ga * ros(l))   ! Eq (14) Bird 1984
 
-             dif(l) = (Ir + Ia) * c2(l)                                 ! Eq (11) Bird 1984
+             dif(l) = (Ir + Ia) * c2(l) + Ig                                 ! Eq (11) Bird 1984
           end do   
 
           ! Interpolate irradiance at Bird wavelengths to desired wavelenths
@@ -236,13 +238,13 @@ contains
           call interp(nlambda_bird, lambda_bird, dif, self%nlambda, self%lambda, diffuse)
 
           ! exter in W/m2/um - divide by 1000 to convert to W/m2/nm  
-          direct  = direct *1e-3_rk
-          diffuse = diffuse*1e-3_rk
+          direct  = direct * 1e-3_rk
+          diffuse = diffuse * 1e-3_rk
 
           ! Atmosphere-Ocean Refraction 
 
           ! Calculate zenith angle (radians) inside the water, taking refraction into account
-          zenw = asin(sin(zen)/1.341_rk)              ! Refractive index of seawater = 1.341, Gregg and Carder 1990
+          zenw = asin(sin(zen) / 1.341_rk)              ! Refractive index of seawater = 1.341, Gregg and Carder 1990
 
           ! Sea-Surface Reflection
 
@@ -440,65 +442,64 @@ contains
       ! A) Raleigh scattering
       do l = 1, nlambda_bird
          tr(l) = exp(-airmass / (115.6406_rk * lampth(l)**4 - 1.335_rk * lampth(l)**2))   ! Eq 2 Bird 1984, Eq 4 Bird & Riordan 1986, Eq 15 Gregg & Carder 1990
-      end do   
+      end do
 
       ! B) Aerosol scattering and absorption
       !  Turbidity is assumed to be 0.27 (a function of lambda, eq (4) of Bird 1984)
       do l = 1, i500 - 1                           
-         ta(l) = exp(-beta1*lampth(l)**(-alpha1)*airmass) ! Eq (6), Bird 1984. For 400–<500 nm, using alpha1 and beta1 turbidiy coefficient values
+         ta(l) = exp(-beta1 * lampth(l)**(-alpha1) * airmass) ! Eq (6), Bird 1984. For 400–<500 nm, using alpha1 and beta1 turbidiy coefficient values
       end do
       do l = i500, nlambda_bird                               
-         ta(l) = exp(-beta2*lampth(l)**(-alpha2)*airmass) ! Eq (6), Bird 1984. For 500–710 nm, using alpha2 and beta2 turbidiy coefficient values
+         ta(l) = exp(-beta2 * lampth(l)**(-alpha2) * airmass) ! Eq (6), Bird 1984. For 500–710 nm, using alpha2 and beta2 turbidiy coefficient values
       end do
 
-      ! C) Water vapour absorption
+      ! C) Water vapour absorption - should NOT use pressure-corrected airmass (see Bird and Riordan 1986)
       do l = 1, nlambda_bird 
-         tw(l) = exp((-0.2385_rk*av(l)*w*airmass)/(1._rk+20.07_rk*av(l)*w*airmass)**0.45_rk) ! Eq 8, Bird and Riordan 1986 (Eq 7 Bird 1984 is wrong, as mentioning in B&R, p 89), Eq 19 Gregg & Carder 1990
+         tw(l) = exp((-0.2385_rk * av(l) * w * airmass) / (1._rk + 20.07_rk * av(l) * w * airmass)**0.45_rk) ! Eq 8, Bird and Riordan 1986 (Eq 7 Bird 1984 is wrong, as mentioning in B&R, p 89), Eq 19 Gregg & Carder 1990
       end do
 
       ! D) Ozone and uniformly mixed gas absorption
 
       ! Ozone
       !mo = 35._rk/sqrt(1224._rk*cos(zen)**2 + 1._rk)               ! Eq 9, Bird 1984 
-      mo = (1._rk + ho/6370._rk)/sqrt(cos(zen)**2 + 2*ho/6370._rk)  ! Eq 10, Bird & Riordan 1986, Eq 14 Gregg & Carder 1990; NB 6370 is the earth's radius in km
+      mo = (1._rk + ho / 6370._rk) / sqrt(cos(zen)**2 + 2 * ho / 6370._rk)  ! Eq 10, Bird & Riordan 1986, Eq 14 Gregg & Carder 1990; NB 6370 is the earth's radius in km
       do l = 1, nlambda_bird
          toz(l) = exp(-ao(l) * O3 * mo)                             ! Eq 8 Bird 1984, Eq 9 Bird & Riordan 1986, Eq 17 Gregg & Carder 1990
-      end do   
+      end do
 
-      ! Uniformly mixed gas   
+      ! Uniformly mixed gas - SHOULD use pressure corrected airmass
       do L = 1, nlambda_bird
-         tu(L) = exp(-1.41_rk*au(L)*airmass/(1._rk + 118.3_rk*au(L)*airmass)**0.45_rk)      ! Eq 10 Bird 1984, Eq 11, Bird and Riordan 1986, Eq 18 Gregg & Carder 1990        
-      end do   
+         tu(L) = exp(-1.41_rk * au(L) * airmass / (1._rk + 118.3_rk * au(L) * airmass)**0.45_rk)      ! Eq 10 Bird 1984, Eq 11, Bird and Riordan 1986, Eq 18 Gregg & Carder 1990        
+      end do
 
    end subroutine calculate_atmospheric_transmittance
 
-   function estimate_ozone(longitude,latitude,yearday) result(O3)
+   function estimate_ozone(longitude, latitude, yearday) result(O3)
       ! Estimate ozone concentration based on Van Heuklon (1979)
-      real(rk),intent(in) :: longitude,latitude,yearday
+      real(rk), intent(in) :: longitude, latitude, yearday
       real(rk) :: O3
       
-      real(rk), parameter       :: pi=3.14159265358979323846_rk
-      real(rk), parameter       :: deg2rad=pi/180._rk
+      real(rk), parameter       :: deg2rad = pi/180._rk
 
       ! Model parameters given in Van Heuklon 1979, Table 1
-      real(rk),parameter :: D = 0.9865_rk, G = 20._rk, J = 235._rk
-      real(rk),parameter :: A_N = 150._rk, beta_N = 1.28_rk, C_N = 40._rk, F_N = -30._rk,    H_N = 3._rk, I_NE = 20._rk, I_NW = 0._rk
-      real(rk),parameter :: A_S = 100._rk, beta_S = 1.5_rk,  C_S = 30._rk, F_S = 152.625_rk, H_S = 2._rk, I_S = -75._rk
+      real(rk), parameter :: D = 0.9865_rk, G = 20._rk, J = 235._rk
+      real(rk), parameter :: A_N = 150._rk, beta_N = 1.28_rk, C_N = 40._rk, F_N = -30._rk,    H_N = 3._rk, I_NE = 20._rk, I_NW = 0._rk
+      real(rk), parameter :: A_S = 100._rk, beta_S = 1.5_rk,  C_S = 30._rk, F_S = 152.625_rk, H_S = 2._rk, I_S = -75._rk
 
-      real(rk) :: A,beta,C,E,F,H,I,phi,lambda
-      
+      real(rk) :: A, beta, C, E, F, H, I, phi, lambda
+
       E = yearday
       phi = latitude
-      lambda = -180._rk + mod(longitude+180._rk,360._rk)
-      
-      if (latitude>0._rk) then
+      lambda = -180._rk + mod(longitude + 180._rk, 360._rk)
+
+      if (latitude > 0._rk) then
          ! Northern hemisphere
          A = A_N
          beta = beta_N
          C = C_N
          F = F_N
          H = H_N
-         if (lambda>0._rk) then
+         if (lambda > 0._rk) then
             ! Eastern hemisphere
             I = I_NE
          else
@@ -516,7 +517,7 @@ contains
       end if
 
       ! Van Heuklon (1979), Eq 4 - note conversion from degrees to radians
-      O3 = J + (A + C*sin(D*(E+F)*deg2rad) + G*sin(H*(lambda+I)*deg2rad))*sin(beta*phi*deg2rad)**2
+      O3 = J + (A + C * sin(D * (E + F) * deg2rad) + G * sin(H * (lambda + I) * deg2rad)) * sin(beta * phi * deg2rad)**2
    end function
 
    subroutine interp_0d(nsource,x,y,ntarget,targetx,targety)
@@ -536,7 +537,7 @@ contains
          end do
          frac = (targetx(j)-x(i))/(x(i+1)-x(i))
          targety(j) = y(i) + frac*(y(i+1)-y(i))
-      end do   
+      end do
    end subroutine
 
    subroutine interp_0d_scalar(nsource,x,y,targetx,targety)
@@ -575,7 +576,7 @@ contains
          end do
          frac = (targetx(j)-x(i))/(x(i+1)-x(i))
          targety(:,j) = y(:,i) + frac*(y(:,i+1)-y(:,i))
-      end do   
+      end do
    end subroutine
 
    subroutine interp_1d_scalar(m,nsource,x,y,targetx,targety)
