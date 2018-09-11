@@ -4,20 +4,23 @@ module slingo_clouds
 
    implicit none
 
+   private
+
 #include "slingo_const.inc"
 
 contains
    
-   subroutine slingo(LWP, r_e, mu0)
+   subroutine slingo(LWP, r_e, mu0, T_DB, T_DIF, T_DIR)
       ! LWP: liquid water path (g m-2)
       ! r_e: equivalent radius of drop size distribution (um)
       ! mu0: consine of zenith angle
       real(rk), intent(in) :: LWP, r_e, mu0
+      real(rk), intent(out), dimension(nslingo) :: T_DB, T_DIF, T_DIR
 
       real(rk), dimension(nslingo) :: tau, omega, g
       real(rk), dimension(nslingo) :: beta0, beta_mu0, f, U2
       real(rk), dimension(nslingo) :: alpha1, alpha2, alpha3, alpha4, epsilon, M, E, gamma1, gamma2
-      real(rk), dimension(nslingo) :: T_DB, R_DIF, T_DIF, R_DIR, T_DIR
+      real(rk), dimension(nslingo) :: R_DIF, R_DIR
       real(rk) :: U1
 
       ! Slingo 1989 Eqs 1-3
