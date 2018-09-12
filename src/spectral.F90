@@ -606,6 +606,7 @@ contains
       ! V: visibility (m)
       ! M: air mass
       ! theta: zenith angle (radians)
+      ! lambda: wave lengths (nm)
       real(rk), intent(in) :: AM, WM, W, RH, V, M, theta
       integer, intent(in) :: nlambda
       real(rk), intent(in) :: lambda(nlambda)
@@ -621,6 +622,7 @@ contains
       real(rk) :: y(nr_eval), x(nr_eval), ymean, xmean
       real(rk) :: tau_alpha(nlambda)
       integer :: i
+      real(rk) :: c_a550, tau_a550
       real(rk) :: B1, B2, B3, cos_theta_bar, F_a, omega_a
 
       ! Amplitude functions for aerosol components (Eqs 21-23 Gregg & Carder 1990)
@@ -639,11 +641,16 @@ contains
       xmean = sum(x) / nr_eval
       ymean = sum(y) / nr_eval
 
-      ! slope is x-y covariance / variance of x
+      ! Slope is x-y covariance / variance of x
       gamma = sum((y - ymean) * (x - xmean)) / sum((x - xmean)**2)
 
       ! Angstrom exponent (Eq 26 Gregg & Carder 1990)
       alpha = -(gamma + 3)
+
+      ! Estimate concentration parameter (Eqs 28, 29 Gregg & Carder 1990)
+      c_a550 = 3.91_rk / V
+      tau_a550 = c_a550 * H_a
+      beta = tau_a550 / 550._rk**(-alpha)
 
       ! Extinction coefficient
       tau_alpha = beta * lambda**(-alpha)
@@ -651,16 +658,16 @@ contains
       ! Transmittance (Eq 26 Gregg & Carder 1990)
       T_a = exp(-tau_alpha * M)
 
-      ! asymmetry parameter (Eq 35 Gregg & Carder 1990) - called alpha in Gregg & Casey 2009
+      ! Asymmetry parameter (Eq 35 Gregg & Carder 1990) - called alpha in Gregg & Casey 2009
       cos_theta_bar = -0.1417_rk * min(max(0._rk, alpha), 1.2_rk) + 0.82_rk
 
-      ! forward scattering probability (NB B1-B3 are A-C in Gregg & Casey 2009 Eqs 3-6)
+      ! Forward scattering probability (NB B1-B3 are A-C in Gregg & Casey 2009 Eqs 3-6)
       B3 = log(1._rk - cos_theta_bar)
       B1 = B3 * (1.459_rk  + B3 * ( 0.1595_rk + 0.4129_rk * B3))
       B2 = B3 * (0.0783_rk + B3 * (-0.3824_rk - 0.5874_rk * B3))
       F_a = 1._rk - 0.5_rk * exp(B1 + B2 * cos(theta) * cos(theta))
 
-      ! single scattering albedo (Eq 36 Gregg & Carder 1990)
+      ! Single scattering albedo (Eq 36 Gregg & Carder 1990)
       omega_a = (-0.0032_rk * AM + 0.972_rk) * exp(3.06e-2_rk * RH)
    end subroutine
 end module
