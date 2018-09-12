@@ -22,8 +22,8 @@ contains
       real(rk), dimension(nslingo) :: tau, omega, g
       real(rk), dimension(nslingo) :: beta0, beta_mu0, f, U2
       real(rk), dimension(nslingo) :: alpha1, alpha2, alpha3, alpha4, epsilon, M, E, gamma1, gamma2
-      real(rk), dimension(nslingo) :: one_minus_omega_f, gamma_denom
-      real(rk) :: U1
+      real(rk), dimension(nslingo) :: one_minus_omega_f, gamma_denom, DIF_denom
+      real(rk), parameter :: U1 = 7._rk / 4._rk
 
       ! Slingo 1989 Eqs 1-3
       ! cloud optical depth, single scatter albedo, asymmetry parameter
@@ -43,8 +43,7 @@ contains
 
       ! reciprocals of the effective cosine for diffuse upward and downward fluxes (Slingo 1989 Eqs 9 and 10)
       ! JB 2018-09-12: Setting lower limit of U2 to 1, given that cosines cannot exceed 1 (thus its reciprocal cannot be lower than 1)      
-      U1 = 7._rk / 4._rk
-      U2 = max(1._rk, 7._rk / 4._rk * (1._rk - (1._rk - omega) / 7._rk / omega / beta0))
+      U2 = max(1._rk, U1 * (1._rk - (1._rk - omega) / 7._rk / omega / beta0))
 
       alpha1 = U1 * (1._rk - omega * (1._rk - beta0))
       alpha2 = U2 * omega * beta0
@@ -62,10 +61,11 @@ contains
       T_DB = exp(-one_minus_omega_f * tau / mu0)
 
       ! Diffuse reflectivity for diffuse incident radiation (Slingo 1989 Eq 21)
-      R_DIF = M * (1._rk - E**2) / (1._rk - E**2 * M**2)
+      DIF_denom = 1._rk - E**2 * M**2
+      R_DIF = M * (1._rk - E**2) / DIF_denom
 
       ! Diffuse transmissivity for diffuse incident radiation (Slingo 1989 Eq 22)
-      T_DIF = E * (1._rk - M**2) / (1._rk - E**2 * M**2)
+      T_DIF = E * (1._rk - M**2) / DIF_denom
 
       ! Diffuse reflectivity for direct incident radiation (Slingo 1989 Eq 21)
       R_DIR = max(0._rk, -gamma2 * R_DIF - gamma1 * T_DB * T_DIF + gamma1)
