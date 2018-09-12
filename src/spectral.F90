@@ -661,9 +661,11 @@ contains
       ! Asymmetry parameter (Eq 35 Gregg & Carder 1990) - called alpha in Gregg & Casey 2009
       cos_theta_bar = -0.1417_rk * min(max(0._rk, alpha), 1.2_rk) + 0.82_rk
 
-      ! Forward scattering probability (NB B1-B3 are A-C in Gregg & Casey 2009 Eqs 3-6)
+      ! Forward scattering probability (Eq 31-34 Gregg & Carder 1990)
+      ! NB B1-B3 are A, B, C in Gregg & Casey 2009 Eqs 3-6
+      ! NB B1-B3 are AFS, BFS, ALG in Bird & Riordan 1986 Eqs 22-26
       B3 = log(1._rk - cos_theta_bar)
-      B1 = B3 * (1.459_rk  + B3 * ( 0.1595_rk + 0.4129_rk * B3))
+      B1 = B3 * (1.4590_rk + B3 * ( 0.1595_rk + 0.4129_rk * B3))
       B2 = B3 * (0.0783_rk + B3 * (-0.3824_rk - 0.5874_rk * B3))
       F_a = 1._rk - 0.5_rk * exp(B1 + B2 * cos(theta) * cos(theta))
 
