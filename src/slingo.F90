@@ -6,15 +6,17 @@ module slingo_clouds
 
    private
 
+   public :: slingo, nslingo
+
 #include "slingo_const.inc"
 
 contains
    
-   subroutine slingo(LWP, r_e, mu0, T_DB, T_DIF, T_DIR)
+   subroutine slingo(mu0, LWP, r_e, T_DB, T_DIF, T_DIR)
+      ! mu0: consine of zenith angle
       ! LWP: liquid water path (g m-2)
       ! r_e: equivalent radius of drop size distribution (um)
-      ! mu0: consine of zenith angle
-      real(rk), intent(in) :: LWP, r_e, mu0
+      real(rk), intent(in) :: mu0, LWP, r_e
       real(rk), intent(out), dimension(nslingo) :: T_DB, T_DIF, T_DIR
 
       real(rk), dimension(nslingo) :: tau, omega, g
