@@ -9,9 +9,10 @@ add_dependencies(fabm_models_spectral fabm_base)
 
 add_library(spectral_test SHARED
             spectral_test.F90
+            $<TARGET_OBJECTS:fabm_models_spectral>
            )
-target_link_libraries(spectral_test fabm_models_spectral fabm)
+target_link_libraries(spectral_test fabm)
 
 #-----------------------------------------------------------------------
-# Copyright (C) 2015 - PML
+# Copyright (C) 2018 - PML
 #-----------------------------------------------------------------------

@@ -12,17 +12,16 @@ module slingo_clouds
 
 contains
    
-   subroutine slingo(mu0, LWP, r_e, T_DB, T_DIF, T_DIR)
+   subroutine slingo(mu0, LWP, r_e, T_DB, T_DIF, T_DIR, R_DIF, R_DIR)
       ! mu0: consine of zenith angle
       ! LWP: liquid water path (g m-2)
       ! r_e: equivalent radius of drop size distribution (um)
       real(rk), intent(in) :: mu0, LWP, r_e
-      real(rk), intent(out), dimension(nslingo) :: T_DB, T_DIF, T_DIR
+      real(rk), intent(out), dimension(nslingo) :: T_DB, T_DIF, T_DIR, R_DIF, R_DIR
 
       real(rk), dimension(nslingo) :: tau, omega, g
       real(rk), dimension(nslingo) :: beta0, beta_mu0, f, U2
       real(rk), dimension(nslingo) :: alpha1, alpha2, alpha3, alpha4, epsilon, M, E, gamma1, gamma2
-      real(rk), dimension(nslingo) :: R_DIF, R_DIR
       real(rk) :: U1
 
       ! Slingo 1989 Eqs 1-3
@@ -49,11 +48,11 @@ contains
       alpha2 = U2 * omega * beta0
       alpha3 = (1 - f) * omega * beta_mu0
       alpha4 = (1 - f) * omega * (1 - beta_mu0)
-      epsilon = sqrt(alpha1 * alpha1 - alpha2 * alpha2)
+      epsilon = sqrt(max(0._rk, alpha1 * alpha1 - alpha2 * alpha2))
       M = alpha2 / (alpha1 + epsilon)
       E = exp(-epsilon * tau)
-      gamma1 = (1 - omega * f) * alpha3 - mu0 * (alpha1 * alpha3 + alpha2 * alpha4) / ((1 - omega * f)**2 - epsilon**2 * mu0**2)
-      gamma2 = -(1 - omega * f) * alpha4 - mu0 * (alpha1 * alpha4 + alpha2 * alpha3) / ((1 - omega * f)**2 - epsilon**2 * mu0**2)
+      gamma1 = ((1 - omega * f) * alpha3 - mu0 * (alpha1 * alpha3 + alpha2 * alpha4)) / ((1 - omega * f)**2 - epsilon**2 * mu0**2)
+      gamma2 = (-(1 - omega * f) * alpha4 - mu0 * (alpha1 * alpha4 + alpha2 * alpha3)) / ((1 - omega * f)**2 - epsilon**2 * mu0**2)
 
       ! Transmissivity for the direct solar beam (Slingo 1989 Eq 20)
       T_DB = exp(-(1 - omega * f) * tau / mu0)
