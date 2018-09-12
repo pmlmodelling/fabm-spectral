@@ -28,6 +28,8 @@ contains
       ! Slingo 1989 Eqs 1-3
       ! cloud optical depth, single scatter albedo, asymmetry parameter
       ! derived for r_e = [4.2, 16.6]
+      ! NB OASIM uses a default r_e that equals the mean of 10 um (Kiehl et al., 1998 J. Clim.) and 11.8 um (Han et al., 1994 J. Clim.)
+      ! NB Stephens 1978 J Atmos Sciences Eq 10 links tau directly to LWP, which allows estimation of r_e as e.g. in Slingo 1989 section #4
       tau = LWP * (slingo_a + slingo_b / r_e)
       omega = 1._rk - (slingo_c + slingo_d * r_e)
       g = slingo_e + slingo_f * r_e
