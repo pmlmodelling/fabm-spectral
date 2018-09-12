@@ -598,4 +598,69 @@ contains
       targety(:) = y(:,i) + frac*(y(:,i+1)-y(:,i))
    end subroutine
 
+   subroutine navy_aerols_model(AM, WM, W, RH, V, M, theta, nlambda, lambda, T_a)
+      ! AM: air-mass type (1 = marine aerosol-dominated, 10 continental aerosol-dominated)
+      ! WM: wind speed averaged over past 24 h (m s-1)
+      ! W: instantaneous wind speed (m s-1)
+      ! RH: relative humidity (-)
+      ! V: visibility (m)
+      ! M: air mass
+      ! theta: zenith angle (radians)
+      real(rk), intent(in) :: AM, WM, W, RH, V, M, theta
+      integer, intent(in) :: nlambda
+      real(rk), intent(in) :: lambda(nlambda)
+      real(rk), intent(out) :: T_a(nlambda)
+
+      real(rk), parameter :: R = 0.05_rk
+      integer, parameter :: nr = 3, nr_eval = 3
+      real(rk), parameter :: r_o(nr) = (/0.03_rk, 0.24_rk, 2.0_rk/)
+      real(rk), parameter :: H_a = 1000._rk ! Aerosol scale height (m) Gregg & Carder 1990 p1665
+      real(rk), parameter :: r_eval(nr_eval) = (/0.1_rk, 1._rk, 10._rk/)
+
+      real(rk) :: A(nr), f, gamma, alpha, beta
+      real(rk) :: y(nr_eval), x(nr_eval), ymean, xmean
+      real(rk) :: tau_alpha(nlambda)
+      integer :: i
+      real(rk) :: B1, B2, B3, cos_theta_bar, F_a, omega_a
+
+      ! Amplitude functions for aerosol components (Eqs 21-23 Gregg & Carder 1990)
+      A(1) = 2000 * AM * AM
+      A(2) = max(0.5_rk, 5.866_rk * (WM - 2.2_rk))
+      A(3) = max(1.4e-5_rk, 0.01527_rk * (W - 2.2_rk) * R)
+
+      ! function relating particle size to relative humidity (Eq 24 Gregg & Carder 1990)
+      f = ((2._rk - RH) / (6 * (1._rk - RH)))**(1._rk / 3._rk)
+
+      ! Estimate gamma with least squares
+      do i = 1, nr_eval
+          y(i) = log(sum(A*exp(-log(r_eval(i)/f/r_o)**2)/f))
+      end do
+      x = log(r_eval)
+      xmean = sum(x) / nr_eval
+      ymean = sum(y) / nr_eval
+
+      ! slope is x-y covariance / variance of x
+      gamma = sum((y - ymean) * (x - xmean)) / sum((x - xmean)**2)
+
+      ! Angstrom exponent (Eq 26 Gregg & Carder 1990)
+      alpha = -(gamma + 3)
+
+      ! Extinction coefficient
+      tau_alpha = beta * lambda**(-alpha)
+
+      ! Transmittance (Eq 26 Gregg & Carder 1990)
+      T_a = exp(-tau_alpha * M)
+
+      ! asymmetry parameter (Eq 35 Gregg & Carder 1990) - called alpha in Gregg & Casey 2009
+      cos_theta_bar = -0.1417_rk * min(max(0._rk, alpha), 1.2_rk) + 0.82_rk
+
+      ! forward scattering probability (NB B1-B3 are A-C in Gregg & Casey 2009 Eqs 3-6)
+      B3 = log(1._rk - cos_theta_bar)
+      B1 = B3 * (1.459_rk  + B3 * ( 0.1595_rk + 0.4129_rk * B3))
+      B2 = B3 * (0.0783_rk + B3 * (-0.3824_rk - 0.5874_rk * B3))
+      F_a = 1._rk - 0.5_rk * exp(B1 + B2 * cos(theta) * cos(theta))
+
+      ! single scattering albedo (Eq 36 Gregg & Carder 1990)
+      omega_a = (-0.0032_rk * AM + 0.972_rk) * exp(3.06e-2_rk * RH)
+   end subroutine
 end module
