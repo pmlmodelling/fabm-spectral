@@ -22,52 +22,56 @@ contains
       real(rk), dimension(nslingo) :: tau, omega, g
       real(rk), dimension(nslingo) :: beta0, beta_mu0, f, U2
       real(rk), dimension(nslingo) :: alpha1, alpha2, alpha3, alpha4, epsilon, M, E, gamma1, gamma2
+      real(rk), dimension(nslingo) :: one_minus_omega_f, gamma_denom
       real(rk) :: U1
 
       ! Slingo 1989 Eqs 1-3
       ! cloud optical depth, single scatter albedo, asymmetry parameter
       ! derived for r_e = [4.2, 16.6]
       tau = LWP * (slingo_a + slingo_b / r_e)
-      omega = -(slingo_c + slingo_d * r_e - 1)
+      omega = 1._rk - (slingo_c + slingo_d * r_e)
       g = slingo_e + slingo_f * r_e
 
       ! fraction of scattered diffuse radation which is scattered into the backward hemisphere (Slingo 1989 Eq 6)
-      beta0 = 3._rk / 7._rk * (1 - g)
+      beta0 = 3._rk / 7._rk * (1._rk - g)
 
       ! fraction of scattered direct radation which is scattered into the backward hemisphere (Slingo 1989 Eq 7)
-      beta_mu0 = 0.5_rk - 0.75_rk * mu0 * g / (1 + g)
+      beta_mu0 = 0.5_rk - 0.75_rk * mu0 * g / (1._rk + g)
 
       ! fraction of scattered direct flux which emerges at zenith angles close to that of the incident beam (Slingo 1989 Eq 8)
       f = g * g
 
       ! reciprocals of the effective cosine for diffuse upward and downward fluxes (Slingo 1989 Eqs 9 and 10)
+      ! JB 2018-09-12: Setting lower limit of U2 to 1, given that cosines cannot exceed 1 (thus its reciprocal cannot be lower than 1)      
       U1 = 7._rk / 4._rk
-      U2 = 7._rk / 4._rk * (1._rk - (1 - omega) / 7._rk / omega / beta0)
+      U2 = max(1._rk, 7._rk / 4._rk * (1._rk - (1._rk - omega) / 7._rk / omega / beta0))
 
-      alpha1 = U1 * (1 - omega * (1 - beta0))
+      alpha1 = U1 * (1._rk - omega * (1._rk - beta0))
       alpha2 = U2 * omega * beta0
       alpha3 = (1 - f) * omega * beta_mu0
       alpha4 = (1 - f) * omega * (1 - beta_mu0)
       epsilon = sqrt(max(0._rk, alpha1 * alpha1 - alpha2 * alpha2))
       M = alpha2 / (alpha1 + epsilon)
       E = exp(-epsilon * tau)
-      gamma1 = ((1 - omega * f) * alpha3 - mu0 * (alpha1 * alpha3 + alpha2 * alpha4)) / ((1 - omega * f)**2 - epsilon**2 * mu0**2)
-      gamma2 = (-(1 - omega * f) * alpha4 - mu0 * (alpha1 * alpha4 + alpha2 * alpha3)) / ((1 - omega * f)**2 - epsilon**2 * mu0**2)
+      one_minus_omega_f = 1._rk - omega * f
+      gamma_denom = one_minus_omega_f**2 - epsilon**2 * mu0**2
+      gamma1 = ( one_minus_omega_f * alpha3 - mu0 * (alpha1 * alpha3 + alpha2 * alpha4)) / gamma_denom
+      gamma2 = (-one_minus_omega_f * alpha4 - mu0 * (alpha1 * alpha4 + alpha2 * alpha3)) / gamma_denom
 
       ! Transmissivity for the direct solar beam (Slingo 1989 Eq 20)
-      T_DB = exp(-(1 - omega * f) * tau / mu0)
+      T_DB = exp(-one_minus_omega_f * tau / mu0)
 
       ! Diffuse reflectivity for diffuse incident radiation (Slingo 1989 Eq 21)
-      R_DIF = M * (1 - E**2) / (1 - E**2 * M**2)
+      R_DIF = M * (1._rk - E**2) / (1._rk - E**2 * M**2)
 
       ! Diffuse transmissivity for diffuse incident radiation (Slingo 1989 Eq 22)
-      T_DIF = E * (1 - M**2) / (1 - E**2 * M**2)
+      T_DIF = E * (1._rk - M**2) / (1._rk - E**2 * M**2)
 
       ! Diffuse reflectivity for direct incident radiation (Slingo 1989 Eq 21)
-      R_DIR = -gamma2 * R_DIF - gamma1 * T_DB * T_DIF + gamma1
+      R_DIR = max(0._rk, -gamma2 * R_DIF - gamma1 * T_DB * T_DIF + gamma1)
 
       ! Diffuse transmissivity for direct incident radiation (Slingo 1989 Eq 21)
-      T_DIR = -gamma2 * T_DIF - gamma1 * T_DB * R_DIF + gamma2 * T_DB
+      T_DIR = min(1._rk, -gamma2 * T_DIF - gamma1 * T_DB * R_DIF + gamma2 * T_DB)
    end subroutine
 
    end module slingo_clouds
