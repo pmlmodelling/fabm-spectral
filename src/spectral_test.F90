@@ -1,6 +1,6 @@
 module spectral_test
    use iso_c_binding, only: c_double
-   use slingo_clouds
+   use fabm_spectral
    use fabm_types, only: rk
 
    implicit none
@@ -14,7 +14,7 @@ module spectral_test
 
       integer :: l
 
-      call slingo(real(mu0, rk), real(LWP, rk), real(r_e, rk), T_DB, T_DIF, T_DIR, R_DIF, R_DIR)
+      call slingo(real(mu0, rk), real(LWP, rk), real(r_e, rk), T_DB, T_DIR)
    end subroutine
 
 end module
