@@ -619,7 +619,7 @@ contains
       real(rk), parameter :: r_eval(nr_eval) = (/0.1_rk, 1._rk, 10._rk/)
 
       real(rk) :: A(nr), f, gamma, alpha, beta
-      real(rk) :: y(nr_eval), x(nr_eval), ymean, xmean
+      real(rk) :: y(nr_eval), x(nr_eval), xsum, ysum
       real(rk) :: tau_alpha(nlambda)
       integer :: i
       real(rk) :: c_a550, tau_a550
@@ -638,11 +638,11 @@ contains
           y(i) = log(sum(A*exp(-log(r_eval(i)/f/r_o)**2)/f))
       end do
       x = log(r_eval)
-      xmean = sum(x) / nr_eval
-      ymean = sum(y) / nr_eval
+      xsum = sum(x)
+      ysum = sum(y)
 
       ! Slope is x-y covariance / variance of x
-      gamma = sum((y - ymean) * (x - xmean)) / sum((x - xmean)**2)
+      gamma = (sum(x * y) - xsum * ysum / nr_eval) / (sum(x**2) - xsum * xsum / nr_eval)
 
       ! Angstrom exponent (Eq 26 Gregg & Carder 1990)
       alpha = -(gamma + 3)
@@ -650,7 +650,7 @@ contains
       ! Estimate concentration parameter (Eqs 28, 29 Gregg & Carder 1990)
       c_a550 = 3.91_rk / V
       tau_a550 = c_a550 * H_a
-      beta = tau_a550 / 550._rk**(-alpha)
+      beta = tau_a550 * 550._rk**alpha
 
       ! Extinction coefficient
       tau_alpha = beta * lambda**(-alpha)
