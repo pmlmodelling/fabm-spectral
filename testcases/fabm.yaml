@@ -24,7 +24,7 @@ instances:
     model: horizontal_constant
     parameters:
       standard_name: visibility_in_air
-      value: 10000
+      value: 25000
   aero:
     model: horizontal_constant
     parameters:
