@@ -19,7 +19,7 @@ instances:
     model: horizontal_constant
     parameters:
       standard_name: atmosphere_mass_content_of_water_vapor
-      value: 0.1
+      value: 20.
   viz:
     model: horizontal_constant
     parameters:

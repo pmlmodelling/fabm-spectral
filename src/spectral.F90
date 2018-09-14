@@ -96,7 +96,7 @@ contains
       call self%register_dependency(self%id_h, standard_variables%cell_thickness)
       call self%register_dependency(self%id_relhum, type_horizontal_standard_variable('relative_humidity'))
       call self%register_dependency(self%id_lwp, type_horizontal_standard_variable('atmosphere_mass_content_of_cloud_liquid_water', 'kg m2'))
-      call self%register_dependency(self%id_WV, type_horizontal_standard_variable('atmosphere_mass_content_of_water_vapor'))
+      call self%register_dependency(self%id_WV, type_horizontal_standard_variable('atmosphere_mass_content_of_water_vapor', 'kg m2'))
       call self%register_dependency(self%id_visibility, type_horizontal_standard_variable('visibility_in_air'))
       call self%register_dependency(self%id_air_mass_type, type_horizontal_standard_variable('aerosol_air_mass_type'))
       call self%register_dependency(self%id_mean_wind_speed, temporal_mean(self%id_wind_speed, period=86400._rk, resolution=3600._rk))
@@ -167,7 +167,7 @@ contains
       real(rk), parameter :: lightspeed = 299792458_rk   ! Speed of light (m/s)
       real(rk), parameter :: Avogadro = 6.02214129e23_rk ! Avogadro constant (/mol)
       
-      real(rk) :: longitude, latitude, yearday, cloud_cover, wind_speed, airpres, relhum, LWP, WV, WM, visibility, AM
+      real(rk) :: longitude, latitude, yearday, cloud_cover, wind_speed, airpres, relhum, LWP, water_vapour, WV, WM, visibility, AM
       real(rk) :: days, hour, theta, costheta
       integer :: l
       real(rk) :: M, M_prime, M_oz
@@ -187,11 +187,12 @@ contains
           _GET_HORIZONTAL_(self%id_airpres, airpres)        ! Surface air pressure (Pa)
           _GET_HORIZONTAL_(self%id_relhum, relhum)          ! Relative humidity (-)
           _GET_HORIZONTAL_(self%id_lwp, LWP)                ! Cloud liquid water content (kg m-2)
-          _GET_HORIZONTAL_(self%id_wv, WV)                  ! Total precipitable water vapour (cm)
+          _GET_HORIZONTAL_(self%id_wv, water_vapour)        ! Total precipitable water vapour (kg m-2) - equivalent to mm
           _GET_HORIZONTAL_(self%id_mean_wind_speed, WM)     ! Daily mean wind speed @ 10 m above surface (m/s)
           _GET_HORIZONTAL_(self%id_visibility, visibility)  ! Visibility (m)
           _GET_HORIZONTAL_(self%id_air_mass_type, AM)       ! Aerosol air mass type (1: open ocean, 10: continental)
 
+          WV = water_vapour / 10
           days = floor(yearday) + 1.0_rk
           hour = mod(yearday, 1.0_rk) * 24.0_rk
 
@@ -234,7 +235,7 @@ contains
 
          ! Transmittance due to Rayleigh scattering (Eq 2 Bird 1984, Eq 4 Bird & Riordan 1986, Eq 15 Gregg & Carder 1990)
          T_r = exp(-M_prime / (115.6406_rk * self%lambda**4 - 1.335_rk * self%lambda**2))
-         
+
          ! Transmittance due to aerosol absorption (Eq 26 Gregg & Carder 1990)
          call navy_aerol_model(AM, WM, wind_speed, relhum, visibility, costheta, self%nlambda, self%lambda, tau_a, F_a, omega_a)
          T_a = exp(-tau_a * M)
