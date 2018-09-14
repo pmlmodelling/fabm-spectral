@@ -10,7 +10,7 @@ module spectral_test
    subroutine run_spectral_test(mu0, LWP, r_e, T_DB, T_DIF, T_DIR, R_DIF, R_DIR) bind(c)
       !DEC$ ATTRIBUTES DLLEXPORT :: run_spectral_test
       real(c_double), value :: mu0, LWP, r_e
-      real(c_double), dimension(nslingo) :: T_DB, T_DIF, T_DIR, R_DIF, R_DIR
+      real(c_double), dimension(nlambda_slingo) :: T_DB, T_DIF, T_DIR, R_DIF, R_DIR
 
       integer :: l
 

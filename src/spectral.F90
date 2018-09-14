@@ -38,6 +38,7 @@ module fabm_spectral
 
 #include "slingo_const.inc"
 #include "water_const.inc"
+#include "oasim_const.inc"
 
    interface interp
       module procedure interp_0d
@@ -66,7 +67,7 @@ contains
       real(rk), parameter :: b1 = -0.0114_rk
       real(rk), parameter :: b2 = 9.552e-6_rk
       real(rk), parameter :: b3 = -2.698e-9_rk
-      
+
       real(rk) :: log_T_w
 
       call self%get_parameter(self%nlambda, 'nlambda', '', 'number of wavelengths')
@@ -115,8 +116,12 @@ contains
       call interp(nlambda_w, lambda_w, a_w, self%nlambda, self%lambda, self%a_w)
       call interp(nlambda_w, lambda_w, b_w, self%nlambda, self%lambda, self%b_w)
 
-      allocate(self%a_o(self%nlambda), self%a_v(self%nlambda), self%a_u(self%nlambda))
-      
+      allocate(self%exter(self%nlambda), self%a_o(self%nlambda), self%a_v(self%nlambda), self%a_u(self%nlambda))
+      call interp(nlambda_oasim, lambda_oasim, ET_oasim, self%nlambda, self%lambda, self%exter)
+      call interp(nlambda_oasim, lambda_oasim, a_o_oasim, self%nlambda, self%lambda, self%a_o)
+      call interp(nlambda_oasim, lambda_oasim, a_v_oasim, self%nlambda, self%lambda, self%a_v)
+      call interp(nlambda_oasim, lambda_oasim, a_u_oasim, self%nlambda, self%lambda, self%a_u)
+
       ! Wavelength dependence of foam reflectance (Eqs A11, A10 Gregg & Casey 2009)
       allocate(self%F(self%nlambda))
       do l = 1, self%nlambda
@@ -127,7 +132,7 @@ contains
             self%F(l) = b0 + b1 * self%lambda(l) + b2 * self%lambda(l)**2 + b3 * self%lambda(l)**3
          end if
       end do
-      
+
       if (save_spectra) then
          allocate(self%id_surface_band_dir(self%nlambda))
          allocate(self%id_surface_band_dif(self%nlambda))
@@ -243,7 +248,7 @@ contains
          T_sclr = T_aa * 0.5_rk * (1._rk - T_r**0.95_rk) + T_r**1.5_rk * T_aa * F_a * (1 - T_as)
 
          ! Transmittance due to absorption and scattering by clouds
-         call slingo(costheta, LWP/1000._rk, r_e, T_dcld, T_scld)
+         call slingo(costheta, LWP/1000._rk, r_e, self%nlambda, self%lambda, T_dcld, T_scld)
 
          ! Sea surface reflectance
           call reflectance(self%nlambda, self%F, theta, wind_speed, rho_d, rho_s)
@@ -509,11 +514,13 @@ contains
       real(rk), parameter :: H_a = 1000._rk ! Aerosol scale height (m) Gregg & Carder 1990 p1665
       real(rk), parameter :: r_eval(nr_eval) = (/0.1_rk, 1._rk, 10._rk/)
 
-      real(rk) :: A(nr), f, gamma, alpha, beta
+      real(rk) :: relhum, A(nr), f, gamma, alpha, beta
       real(rk) :: y(nr_eval), x(nr_eval), xsum, ysum
       integer :: i
       real(rk) :: c_a550, tau_a550
       real(rk) :: B1, B2, B3, cos_theta_bar
+
+      relhum = min(0.999_rk, RH)
 
       ! Amplitude functions for aerosol components (Eqs 21-23 Gregg & Carder 1990)
       A(1) = 2000 * AM * AM
@@ -521,7 +528,7 @@ contains
       A(3) = max(1.4e-5_rk, 0.01527_rk * (W - 2.2_rk) * R)
 
       ! function relating particle size to relative humidity (Eq 24 Gregg & Carder 1990)
-      f = ((2._rk - RH) / (6 * (1._rk - RH)))**(1._rk / 3._rk)
+      f = ((2._rk - relhum) / (6 * (1._rk - relhum)))**(1._rk / 3._rk)
 
       ! Estimate gamma with least squares
       do i = 1, nr_eval
@@ -557,9 +564,9 @@ contains
       F_a = 1._rk - 0.5_rk * exp(B1 + B2 * costheta * costheta)
 
       ! Single scattering albedo (Eq 36 Gregg & Carder 1990)
-      omega_a = (-0.0032_rk * AM + 0.972_rk) * exp(3.06e-2_rk * RH)
+      omega_a = (-0.0032_rk * AM + 0.972_rk) * exp(3.06e-2_rk * relhum)
    end subroutine
-   
+
    subroutine reflectance(nlambda, F, theta, W, rho_d, rho_s)
       integer, intent(in) :: nlambda
       real(rk), intent(in) :: F(nlambda), theta, W
@@ -601,7 +608,7 @@ contains
 
       ! Calculate zenith angle (radians) inside the water, taking refraction into account
       theta_r = asin(sin(theta) / n_w)              ! Refractive index of seawater = 1.341, Gregg and Carder 1990
-      
+
       ! Direct light specular component (Eqs 46, 47 Gregg and Carder 1990)
       if (theta * rad2deg >= 40._rk .and. W > 2._rk) then
          ! Wind speed dependant
@@ -623,18 +630,19 @@ contains
       rho_s = rho_ssp + rho_f
    end subroutine
 
-   subroutine slingo(mu0, LWP, r_e, T_DB, T_DIR)
+   subroutine slingo(mu0, LWP, r_e, nlambda, lambda, T_dcld, T_scld)
       ! mu0: cosine of zenith angle
       ! LWP: liquid water path (g m-2)
       ! r_e: equivalent radius of drop size distribution (um)
-      real(rk), intent(in) :: mu0, LWP, r_e
-      real(rk), intent(out), dimension(nlambda_slingo) :: T_DB, T_DIR
+      real(rk), intent(in) :: mu0, LWP, r_e, lambda(nlambda)
+      integer, intent(in) :: nlambda
+      real(rk), intent(out), dimension(nlambda) :: T_dcld, T_scld
 
       real(rk), dimension(nlambda_slingo) :: tau, omega, g
       real(rk), dimension(nlambda_slingo) :: beta0, beta_mu0, f, U2
       real(rk), dimension(nlambda_slingo) :: alpha1, alpha2, alpha3, alpha4, epsilon, M, E, gamma1, gamma2
       real(rk), dimension(nlambda_slingo) :: one_minus_omega_f, gamma_denom, DIF_denom
-      real(rk), dimension(nlambda_slingo) :: T_DIF, R_DIF, R_DIR
+      real(rk), dimension(nlambda_slingo) :: T_DB, R_DIF, T_DIF, R_DIR, T_DIR
       real(rk), parameter :: U1 = 7._rk / 4._rk
 
       ! Slingo 1989 Eqs 1-3
@@ -686,6 +694,9 @@ contains
 
       ! Diffuse transmissivity for direct incident radiation (Slingo 1989 Eq 21)
       T_DIR = min(1._rk, -gamma2 * T_DIF - gamma1 * T_DB * R_DIF + gamma2 * T_DB)
+
+      call interp(nlambda_slingo, lambda_slingo, T_DB, nlambda, lambda, T_dcld)
+      call interp(nlambda_slingo, lambda_slingo, T_DIR, nlambda, lambda, T_scld)
    end subroutine
 
 end module
