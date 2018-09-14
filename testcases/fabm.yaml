@@ -1,0 +1,32 @@
+instances:
+  light:
+    model: spectral/spectral
+    parameters:
+      nlambda: 50
+      lambda_min: 400
+      lambda_max: 700
+  lwp:
+    model: horizontal_constant
+    parameters:
+      standard_name: atmosphere_mass_content_of_cloud_liquid_water
+      value: 0.1
+  hum:
+    model: horizontal_constant
+    parameters:
+      standard_name: relative_humidity
+      value: 1
+  vap:
+    model: horizontal_constant
+    parameters:
+      standard_name: atmosphere_mass_content_of_water_vapor
+      value: 0.1
+  viz:
+    model: horizontal_constant
+    parameters:
+      standard_name: visibility_in_air
+      value: 10000
+  aero:
+    model: horizontal_constant
+    parameters:
+      standard_name: aerosol_air_mass_type
+      value: 1
