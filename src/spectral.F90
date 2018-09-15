@@ -39,6 +39,7 @@ module fabm_spectral
 #include "slingo_const.inc"
 #include "water_const.inc"
 #include "oasim_const.inc"
+#include "astm_const.inc"
 
    interface interp
       module procedure interp_0d
@@ -117,7 +118,7 @@ contains
       call interp(nlambda_w, lambda_w, b_w, self%nlambda, self%lambda, self%b_w)
 
       allocate(self%exter(self%nlambda), self%a_o(self%nlambda), self%a_v(self%nlambda), self%a_u(self%nlambda))
-      call interp(nlambda_oasim, lambda_oasim, ET_oasim, self%nlambda, self%lambda, self%exter)
+      call interp(nlambda_astm, lambda_astm, ET_astm, self%nlambda, self%lambda, self%exter)
       call interp(nlambda_oasim, lambda_oasim, a_o_oasim, self%nlambda, self%lambda, self%a_o)
       call interp(nlambda_oasim, lambda_oasim, a_v_oasim, self%nlambda, self%lambda, self%a_v)
       call interp(nlambda_oasim, lambda_oasim, a_u_oasim, self%nlambda, self%lambda, self%a_u)
