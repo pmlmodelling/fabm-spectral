@@ -14,7 +14,7 @@ module spectral_test
 
       integer :: l
 
-      call slingo(real(mu0, rk), real(LWP, rk), real(r_e, rk), T_DB, T_DIR)
+      call slingo(real(mu0, rk), real(LWP, rk), real(r_e, rk), nlambda_slingo, lambda_slingo, T_DB, T_DIR)
    end subroutine
 
 end module
