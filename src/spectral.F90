@@ -13,7 +13,7 @@ module fabm_spectral
 
    private
 
-   public :: slingo, nlambda_slingo
+   public :: slingo, nlambda_slingo, lambda_slingo
 
    type,extends(type_base_model), public :: type_spectral
       type (type_horizontal_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_O3, id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf
@@ -249,7 +249,7 @@ contains
          T_sclr = T_aa * 0.5_rk * (1._rk - T_r**0.95_rk) + T_r**1.5_rk * T_aa * F_a * (1 - T_as)
 
          ! Transmittance due to absorption and scattering by clouds
-         call slingo(costheta, LWP/1000._rk, r_e, self%nlambda, self%lambda, T_dcld, T_scld)
+         call slingo(costheta, LWP * 1000, r_e, self%nlambda, self%lambda, T_dcld, T_scld)
 
          ! Sea surface reflectance
           call reflectance(self%nlambda, self%F, theta, wind_speed, rho_d, rho_s)
