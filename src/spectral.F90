@@ -55,9 +55,12 @@ contains
       integer,               intent(in)            :: configunit
 
       integer :: l
+      integer :: lambda_method, exter_source
       real(rk) :: lambda_min, lambda_max
       logical :: save_spectra
       character(len=8) :: strwavelength
+
+      integer, parameter :: exter_source = 2
 
       ! Coefficients for wavelength dependence of foam reflectance (Eqs A11, A12 in Gregg & Casey 2009)
       real(rk), parameter :: a0 = 0.9976_rk
@@ -71,14 +74,22 @@ contains
 
       real(rk) :: log_T_w
 
-      call self%get_parameter(self%nlambda, 'nlambda', '', 'number of wavebands')
-      call self%get_parameter(lambda_min, 'lambda_min', 'nm', 'minimum wavelength', minimum=0._rk)
-      call self%get_parameter(lambda_max, 'lambda_max', 'nm', 'maximum wavelength', minimum=0._rk)
-      allocate(self%lambda(self%nlambda), self%lambda_bounds(self%nlambda + 1))
-      do l = 1, self%nlambda + 1
-         self%lambda_bounds(l) = lambda_min + (l - 1) * (lambda_max - lambda_min) / self%nlambda
-      end do
-      self%lambda = (self%lambda_bounds(1:self%nlambda) + self%lambda_bounds(2:self%nlambda + 1)) / 2
+      call self%get_parameter(lambda_method, 'lambda_method', '', 'choice of wavebands (0: custom range, 1: OASIM)', default=1)
+      select case (lambda_method)
+      case (0)
+         call self%get_parameter(self%nlambda, 'nlambda', '', 'number of wavebands')
+         call self%get_parameter(lambda_min, 'lambda_min', 'nm', 'minimum wavelength', minimum=0._rk)
+         call self%get_parameter(lambda_max, 'lambda_max', 'nm', 'maximum wavelength', minimum=0._rk)
+         allocate(self%lambda(self%nlambda), self%lambda_bounds(self%nlambda + 1))
+         do l = 1, self%nlambda + 1
+            self%lambda_bounds(l) = lambda_min + (l - 1) * (lambda_max - lambda_min) / self%nlambda
+         end do
+         self%lambda = (self%lambda_bounds(1:self%nlambda) + self%lambda_bounds(2:self%nlambda + 1)) / 2
+      case (1)
+         self%nlambda = nlambda_oasim
+         allocate(self%lambda(self%nlambda), self%lambda_bounds(self%nlambda + 1))
+         self%lambda(:) = lambda_oasim
+      end select
       call self%get_parameter(save_spectra, 'save_spectra', '', 'save full spectral irradiance', default=.false.)
 
       ! Find wavelength bounds of photosynthetically active radiation
@@ -119,7 +130,11 @@ contains
       call interp(nlambda_w, lambda_w, b_w, self%nlambda, self%lambda, self%b_w)
 
       allocate(self%exter(self%nlambda), self%a_o(self%nlambda), self%a_v(self%nlambda), self%a_u(self%nlambda))
-      call interp(nlambda_astm, lambda_astm, ET_astm, self%nlambda, self%lambda, self%exter)
+      if (exter_source == 1) then
+         call interp(nlambda_oasim, lambda_oasim, ET_oasim, self%nlambda, self%lambda, self%exter)
+      else
+         call interp(nlambda_astm, lambda_astm, ET_astm, self%nlambda, self%lambda, self%exter)
+      end if
       call interp(nlambda_oasim, lambda_oasim, a_o_oasim, self%nlambda, self%lambda, self%a_o)
       call interp(nlambda_oasim, lambda_oasim, a_v_oasim, self%nlambda, self%lambda, self%a_v)
       call interp(nlambda_oasim, lambda_oasim, a_u_oasim, self%nlambda, self%lambda, self%a_u)
