@@ -16,8 +16,8 @@ module fabm_spectral
    public :: slingo, nlambda_slingo, lambda_slingo
 
    type,extends(type_base_model), public :: type_spectral
-      type (type_horizontal_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_O3, id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf
-      type (type_horizontal_dependency_id) :: id_lon, id_lat, id_cloud, id_wind_speed, id_airpres, id_relhum, id_lwp, id_WV, id_mean_wind_speed, id_visibility, id_air_mass_type
+      type (type_horizontal_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf
+      type (type_horizontal_dependency_id) :: id_lon, id_lat, id_cloud, id_wind_speed, id_airpres, id_relhum, id_lwp, id_O3, id_WV, id_mean_wind_speed, id_visibility, id_air_mass_type
       type (type_global_dependency_id) :: id_yearday
       type (type_dependency_id) :: id_h
       integer :: nlambda
@@ -50,7 +50,7 @@ module fabm_spectral
 
 contains
 
-   subroutine initialize(self,configunit)
+   subroutine initialize(self, configunit)
       class (type_spectral), intent(inout), target :: self
       integer,               intent(in)            :: configunit
 
@@ -96,8 +96,9 @@ contains
       call self%register_dependency(self%id_yearday, standard_variables%number_of_days_since_start_of_the_year)
       call self%register_dependency(self%id_h, standard_variables%cell_thickness)
       call self%register_dependency(self%id_relhum, type_horizontal_standard_variable('relative_humidity'))
-      call self%register_dependency(self%id_lwp, type_horizontal_standard_variable('atmosphere_mass_content_of_cloud_liquid_water', 'kg m2'))
-      call self%register_dependency(self%id_WV, type_horizontal_standard_variable('atmosphere_mass_content_of_water_vapor', 'kg m2'))
+      call self%register_dependency(self%id_lwp, type_horizontal_standard_variable('atmosphere_mass_content_of_cloud_liquid_water', 'kg m-2'))
+      call self%register_dependency(self%id_O3, type_horizontal_standard_variable('atmosphere_mass_content_of_ozone', 'kg m-2'))
+      call self%register_dependency(self%id_WV, type_horizontal_standard_variable('atmosphere_mass_content_of_water_vapor', 'kg m-2'))
       call self%register_dependency(self%id_visibility, type_horizontal_standard_variable('visibility_in_air'))
       call self%register_dependency(self%id_air_mass_type, type_horizontal_standard_variable('aerosol_air_mass_type'))
       call self%register_dependency(self%id_mean_wind_speed, temporal_mean(self%id_wind_speed, period=86400._rk, resolution=3600._rk))
@@ -110,7 +111,6 @@ contains
       call self%register_diagnostic_variable(self%id_uv_sf,  'uv_sf',      'W/m^2',     'net ultraviolet radiative flux in air')
       call self%register_diagnostic_variable(self%id_par_sf, 'par_sf',     'W/m^2',     'net photosynthetically active radiation in air')
       call self%register_diagnostic_variable(self%id_par_E_sf, 'par_E_sf', 'umol/m^2/s','net photosynthetic photon flux density in air')
-      call self%register_diagnostic_variable(self%id_O3, 'O3', 'atm cm', 'atmospheric ozone concentration')
 
       ! Interpolate absorption and scattering spectra to user wavelength grid
       allocate(self%a_w(self%nlambda), self%b_w(self%nlambda))
@@ -167,7 +167,7 @@ contains
       real(rk), parameter :: Planck = 6.62606957e-34     ! Planck constant (m2 kg/s)
       real(rk), parameter :: lightspeed = 299792458_rk   ! Speed of light (m/s)
       real(rk), parameter :: Avogadro = 6.02214129e23_rk ! Avogadro constant (/mol)
-      
+
       real(rk) :: longitude, latitude, yearday, cloud_cover, wind_speed, airpres, relhum, LWP, water_vapour, WV, WM, visibility, AM
       real(rk) :: days, hour, theta, costheta
       integer :: l
@@ -188,12 +188,14 @@ contains
           _GET_HORIZONTAL_(self%id_airpres, airpres)        ! Surface air pressure (Pa)
           _GET_HORIZONTAL_(self%id_relhum, relhum)          ! Relative humidity (-)
           _GET_HORIZONTAL_(self%id_lwp, LWP)                ! Cloud liquid water content (kg m-2)
+          _GET_HORIZONTAL_(self%id_O3, O3)                  ! Ozone content (kg m-2)
           _GET_HORIZONTAL_(self%id_wv, water_vapour)        ! Total precipitable water vapour (kg m-2) - equivalent to mm
           _GET_HORIZONTAL_(self%id_mean_wind_speed, WM)     ! Daily mean wind speed @ 10 m above surface (m/s)
           _GET_HORIZONTAL_(self%id_visibility, visibility)  ! Visibility (m)
           _GET_HORIZONTAL_(self%id_air_mass_type, AM)       ! Aerosol air mass type (1: open ocean, 10: continental)
 
-          WV = water_vapour / 10
+          WV = water_vapour / 10                ! from kg m-2 to cm
+          O3 = O3 * (1000 / 48._rk) / 0.4462_rk ! from kg m-2 to mol m-2, then from mol m-2 to atm cm (Basher 1982)
           days = floor(yearday) + 1.0_rk
           hour = mod(yearday, 1.0_rk) * 24.0_rk
 
@@ -208,10 +210,6 @@ contains
 
           ! Pressure-corrected atmospheric path length (Eq A6 Casey & Gregg 2009)
           M_prime = M * airpres / pres0
-          
-          ! Bird 1984 p 466 reports O3=0.344 atm-cm. We use Van Heuklon (1979) to account for seasonal and geographical variation.
-          O3 = estimate_ozone(longitude, latitude, yearday) * 0.001_rk
-          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_O3, O3)
 
          ! Atmospheric path length for ozone
          !mo = 35._rk/sqrt(1224._rk*cos(zen)**2 + 1._rk)               ! Eq 9, Bird 1984 
@@ -372,52 +370,6 @@ contains
 
        zenith_angle = acos(coszen)
    end function zenith_angle
-
-   function estimate_ozone(longitude, latitude, yearday) result(O3)
-      ! Estimate ozone concentration based on Van Heuklon (1979)
-      real(rk), intent(in) :: longitude, latitude, yearday
-      real(rk) :: O3
-      
-      real(rk), parameter       :: deg2rad = pi/180._rk
-
-      ! Model parameters given in Van Heuklon 1979, Table 1
-      real(rk), parameter :: D = 0.9865_rk, G = 20._rk, J = 235._rk
-      real(rk), parameter :: A_N = 150._rk, beta_N = 1.28_rk, C_N = 40._rk, F_N = -30._rk,    H_N = 3._rk, I_NE = 20._rk, I_NW = 0._rk
-      real(rk), parameter :: A_S = 100._rk, beta_S = 1.5_rk,  C_S = 30._rk, F_S = 152.625_rk, H_S = 2._rk, I_S = -75._rk
-
-      real(rk) :: A, beta, C, E, F, H, I, phi, lambda
-
-      E = yearday
-      phi = latitude
-      lambda = -180._rk + mod(longitude + 180._rk, 360._rk)
-
-      if (latitude > 0._rk) then
-         ! Northern hemisphere
-         A = A_N
-         beta = beta_N
-         C = C_N
-         F = F_N
-         H = H_N
-         if (lambda > 0._rk) then
-            ! Eastern hemisphere
-            I = I_NE
-         else
-            ! Western hemisphere
-            I = I_NW
-         end if
-      else
-         ! Southern hemisphere
-         A = A_S
-         beta = beta_S
-         C = C_S
-         F = F_S
-         H = H_S
-         I = I_S
-      end if
-
-      ! Van Heuklon (1979), Eq 4 - note conversion from degrees to radians
-      O3 = J + (A + C * sin(D * (E + F) * deg2rad) + G * sin(H * (lambda + I) * deg2rad)) * sin(beta * phi * deg2rad)**2
-   end function
 
    subroutine interp_0d(nsource,x,y,ntarget,targetx,targety)
       ! 1D interpolation, extrapolates beyond boundaries
