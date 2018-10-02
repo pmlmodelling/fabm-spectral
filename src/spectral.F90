@@ -16,14 +16,16 @@ module fabm_spectral
    public :: slingo, nlambda_slingo, lambda_slingo
 
    type,extends(type_base_model), public :: type_spectral
-      type (type_horizontal_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf
+      type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E
+      type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf
+      type (type_horizontal_diagnostic_variable_id) :: id_swr_sf_w, id_par_sf_w, id_uv_sf_w, id_par_E_sf_w
       type (type_horizontal_dependency_id) :: id_lon, id_lat, id_cloud, id_wind_speed, id_airpres, id_relhum, id_lwp, id_O3, id_WV, id_mean_wind_speed, id_visibility, id_air_mass_type
       type (type_global_dependency_id) :: id_yearday
       type (type_dependency_id) :: id_h
       integer :: nlambda
       type (type_horizontal_diagnostic_variable_id), dimension(:), allocatable :: id_surface_band_dir, id_surface_band_dif
       type (type_diagnostic_variable_id), dimension(:), allocatable :: id_band_dir, id_band_dif
-      real(rk), dimension(:), allocatable :: lambda, lambda_bounds, par_weights, swr_weights, uv_weights, F
+      real(rk), dimension(:), allocatable :: lambda, lambda_bounds, par_weights, par_E_weights, swr_weights, uv_weights, F
       real(rk), dimension(:), allocatable :: exter
       real(rk), dimension(:), allocatable :: a_o, a_u, a_v
       real(rk), dimension(:), allocatable :: a_w, b_w
@@ -72,6 +74,10 @@ contains
       real(rk), parameter :: b2 = 9.552e-6_rk
       real(rk), parameter :: b3 = -2.698e-9_rk
 
+      real(rk), parameter :: Planck = 6.62606957e-34     ! Planck constant (m2 kg/s)
+      real(rk), parameter :: lightspeed = 299792458_rk   ! Speed of light (m/s)
+      real(rk), parameter :: Avogadro = 6.02214129e23_rk ! Avogadro constant (/mol)
+
       real(rk) :: log_T_w
 
       call self%get_parameter(lambda_method, 'lambda_method', '', 'choice of wavebands (0: custom range, 1: OASIM)', default=1)
@@ -96,9 +102,11 @@ contains
       allocate(self%par_weights(self%nlambda))
       allocate(self%swr_weights(self%nlambda))
       allocate(self%uv_weights(self%nlambda))
+      allocate(self%par_E_weights(self%nlambda))
       call calculate_integral_weights(400._rk, 700._rk, self%nlambda, self%lambda, self%par_weights)
-      call calculate_integral_weights(0._rk, 4000._rk, self%nlambda, self%lambda, self%swr_weights)
-      call calculate_integral_weights(0._rk, 400._rk, self%nlambda, self%lambda, self%uv_weights)
+      call calculate_integral_weights(300._rk, 4000._rk, self%nlambda, self%lambda, self%swr_weights)
+      call calculate_integral_weights(300._rk, 400._rk, self%nlambda, self%lambda, self%uv_weights)
+      self%par_E_weights(:) = self%par_weights * self%lambda /(Planck*lightspeed)/Avogadro*1e-3_rk ! divide by 1e9 to go from nm to m, multiply by 1e6 to go from mol to umol
 
       call self%register_dependency(self%id_lon, standard_variables%longitude)
       call self%register_dependency(self%id_lat, standard_variables%latitude)
@@ -115,14 +123,18 @@ contains
       call self%register_dependency(self%id_air_mass_type, type_horizontal_standard_variable('aerosol_air_mass_type'))
       call self%register_dependency(self%id_mean_wind_speed, temporal_mean(self%id_wind_speed, period=86400._rk, resolution=3600._rk))
 
-      call self%register_diagnostic_variable(self%id_swr, 'swr',     'W/m^2',     'shortwave radiation')
-      call self%register_diagnostic_variable(self%id_uv,  'uv',      'W/m^2',     'ultraviolet radiative flux')
-      call self%register_diagnostic_variable(self%id_par, 'par',     'W/m^2',     'photosynthetically active radiation')
-      call self%register_diagnostic_variable(self%id_par_E, 'par_E', 'umol/m^2/s','photosynthetic photon flux density')
-      call self%register_diagnostic_variable(self%id_swr_sf, 'swr_sf',     'W/m^2',     'net shortwave radiation in air')
-      call self%register_diagnostic_variable(self%id_uv_sf,  'uv_sf',      'W/m^2',     'net ultraviolet radiative flux in air')
-      call self%register_diagnostic_variable(self%id_par_sf, 'par_sf',     'W/m^2',     'net photosynthetically active radiation in air')
-      call self%register_diagnostic_variable(self%id_par_E_sf, 'par_E_sf', 'umol/m^2/s','net photosynthetic photon flux density in air')
+      !call self%register_diagnostic_variable(self%id_swr, 'swr',     'W/m^2',     'shortwave radiation')
+      !call self%register_diagnostic_variable(self%id_uv,  'uv',      'W/m^2',     'ultraviolet radiative flux')
+      !call self%register_diagnostic_variable(self%id_par, 'par',     'W/m^2',     'photosynthetically active radiation')
+      !call self%register_diagnostic_variable(self%id_par_E, 'par_E', 'umol/m^2/s','photosynthetic photon flux density')
+      call self%register_diagnostic_variable(self%id_swr_sf, 'swr_sf',     'W/m^2',     'downward shortwave radiation in air')
+      call self%register_diagnostic_variable(self%id_uv_sf,  'uv_sf',      'W/m^2',     'downward ultraviolet radiative flux in air')
+      call self%register_diagnostic_variable(self%id_par_sf, 'par_sf',     'W/m^2',     'downward photosynthetically active radiation in air')
+      call self%register_diagnostic_variable(self%id_par_E_sf, 'par_E_sf', 'umol/m^2/s','downward photosynthetic photon flux density in air')
+      call self%register_diagnostic_variable(self%id_swr_sf_w, 'swr_sf_w',     'W/m^2',     'downward shortwave radiation in water')
+      call self%register_diagnostic_variable(self%id_uv_sf_w,  'uv_sf_w',      'W/m^2',     'downward ultraviolet radiative flux in water')
+      call self%register_diagnostic_variable(self%id_par_sf_w, 'par_sf_w',     'W/m^2',     'downward photosynthetically active radiation in water')
+      call self%register_diagnostic_variable(self%id_par_E_sf_w, 'par_E_sf_w', 'umol/m^2/s','downward photosynthetic photon flux density in water')
 
       ! Interpolate absorption and scattering spectra to user wavelength grid
       allocate(self%a_w(self%nlambda), self%b_w(self%nlambda))
@@ -188,10 +200,6 @@ contains
       !real(rk), parameter :: ga = 0.05_rk ! ground albedo
       real(rk), parameter :: H_oz = 22._rk ! Height of maximum ozone concentration (km)
       real(rk), parameter :: r_e = (10._rk + 11.8_rk) / 2 ! equivalent radius of cloud drop size distribution (um) based on mean of Kiehl et al. & Han et al. (cf OASIM)
-
-      real(rk), parameter :: Planck = 6.62606957e-34     ! Planck constant (m2 kg/s)
-      real(rk), parameter :: lightspeed = 299792458_rk   ! Speed of light (m/s)
-      real(rk), parameter :: Avogadro = 6.02214129e23_rk ! Avogadro constant (/mol)
 
       real(rk) :: longitude, latitude, yearday, cloud_cover, wind_speed, airpres, relhum, LWP, water_vapour, WV, WM, visibility, AM
       real(rk) :: days, hour, theta, costheta
@@ -282,14 +290,28 @@ contains
          ! Transmittance due to absorption and scattering by clouds
          call slingo(costheta, LWP * 1000, r_e, self%nlambda, self%lambda, T_dcld, T_scld)
 
+         ! Diffuse and direct irradiance streams (Eqs 1, 2 Gregg & Casey 2009)
+         ! These combine terms for clear and cloudy skies, weighted by cloud cover fraction
+         direct = self%exter * costheta * T_g * ((1._rk - cloud_cover) * T_dclr + cloud_cover * T_dcld)
+         diffuse = self%exter * costheta * T_g * ((1._rk - cloud_cover) * T_sclr + cloud_cover * T_scld)
+
+         spectrum = direct + diffuse
+         par_J = sum(self%par_weights * spectrum)
+         swr_J = sum(self%swr_weights * spectrum)
+         par_E = sum(self%par_E_weights * spectrum)
+         uv_J  = sum(self%uv_weights * spectrum)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_sf, par_J)  ! Photosynthetically Active Radiation (W/m2)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_E_sf,par_E) ! Photosynthetically Active Radiation (umol/m2/s)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_sf,  swr_J) ! Total shortwave radiation (W/m2) [up to 4000 nm]
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_uv_sf, uv_J)    ! UV (W/m2)
+
          ! Sea surface reflectance
          call reflectance(self%nlambda, self%F, theta, wind_speed, rho_d, rho_s)
 
-         ! Diffuse and direct irradiance streams (Eqs 1, 2 Gregg & Casey 2009)
-         ! These combine terms for clear and cloudy skies, weighted by cloud cover fraction
-         ! They also incorporate the loss due to reflectance
-         direct = self%exter * costheta * T_g * ((1._rk - cloud_cover) * T_dclr + cloud_cover * T_dcld) * (1._rk - rho_d)
-         diffuse = self%exter * costheta * T_g * ((1._rk - cloud_cover) * T_sclr + cloud_cover * T_scld) * (1._rk - rho_s)
+         ! Incorporate the loss due to reflectance
+         direct = direct * (1._rk - rho_d)
+         diffuse = diffuse * (1._rk - rho_s)
+         spectrum = direct + diffuse
 
          if (allocated(self%id_surface_band_dir)) then
             do l = 1, self%nlambda
@@ -298,15 +320,14 @@ contains
             end do
          end if
 
-         spectrum = direct + diffuse
          par_J = sum(self%par_weights * spectrum)
          swr_J = sum(self%swr_weights * spectrum)
-         par_E = sum(self%par_weights * spectrum * self%lambda)
+         par_E = sum(self%par_E_weights * spectrum)
          uv_J  = sum(self%uv_weights * spectrum)
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_sf, par_J) ! Photosynthetically Active Radiation (W/m2)
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_E_sf,par_E/(Planck*lightspeed)/Avogadro*1e-3_rk) ! Photosynthetically Active Radiation (umol/m2/s) - divide by 1e9 to go from nm to m, multiply by 1e6 to go from mol to umol
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_sf,  swr_J) ! Total shortwave radiation (W/m2) [up to 4000 nm]
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_uv, uv_J)       ! UV (W/m2)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_sf_w, par_J)  ! Photosynthetically Active Radiation (W/m2)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_E_sf_w,par_E) ! Photosynthetically Active Radiation (umol/m2/s)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_sf_w,  swr_J) ! Total shortwave radiation (W/m2) [up to 4000 nm]
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_uv_sf_w, uv_J)    ! UV (W/m2)
 
       _HORIZONTAL_LOOP_END_
 
