@@ -50,12 +50,12 @@ contains
       ! From GOTM's airsea_variables.F90
       real(rk), parameter :: const06=0.62198
       
-      real(rk) :: qa, ta, airpres, relhum, ea_sat, ea
+      real(rk) :: qa, ta, airp, relhum, ea_sat, ea
 
       _HORIZONTAL_LOOP_BEGIN_
-          _GET_HORIZONTAL_(self%id_sphum, qa)         ! Specific humidity (kg kg-1)
-          _GET_HORIZONTAL_(self%id_airtemp, ta)       ! 2m air temperature
-          _GET_HORIZONTAL_(self%id_airpres, airpres)  ! Surface air pressure (Pa)
+          _GET_HORIZONTAL_(self%id_sphum, qa)      ! Specific humidity (kg kg-1)
+          _GET_HORIZONTAL_(self%id_airtemp, ta)    ! 2m air temperature
+          _GET_HORIZONTAL_(self%id_airpres, airp)  ! Surface air pressure (Pa)
 
           ! Get saturation vapor pressure from air temperature (Lowe 1977; taken from GOTM's humidity.F90)
           ea_sat = a1 +ta*(a2+ta*(a3+ta*(a4+ta*(a5+ta*(a6+ta*a7)))))
@@ -63,7 +63,7 @@ contains
 
           ! from specific humidity qa to vapour pressure ea
           ! GOTM gives inverse as qa = const06*ea/(airp-0.377*ea)
-          ea = qa * airpres / (const06 - 0.377*qa)
+          ea = qa * airp / (const06 + 0.377*qa)
           relhum = ea / ea_sat
 
           _SET_HORIZONTAL_DIAGNOSTIC_(self%id_relhum, relhum)
