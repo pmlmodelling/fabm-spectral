@@ -23,7 +23,7 @@ module fabm_spectral
       integer :: nlambda
       type (type_horizontal_diagnostic_variable_id), dimension(:), allocatable :: id_surface_band_dir, id_surface_band_dif
       type (type_diagnostic_variable_id), dimension(:), allocatable :: id_band_dir, id_band_dif
-      real(rk), dimension(:), allocatable :: lambda, par_weights, swr_weights, uv_weights, F
+      real(rk), dimension(:), allocatable :: lambda, lambda_bounds, par_weights, swr_weights, uv_weights, F
       real(rk), dimension(:), allocatable :: exter
       real(rk), dimension(:), allocatable :: a_o, a_u, a_v
       real(rk), dimension(:), allocatable :: a_w, b_w
@@ -71,13 +71,14 @@ contains
 
       real(rk) :: log_T_w
 
-      call self%get_parameter(self%nlambda, 'nlambda', '', 'number of wavelengths')
-      call self%get_parameter(lambda_min, 'lambda_min', 'nm', 'minimum wavelength')
-      call self%get_parameter(lambda_max, 'lambda_max', 'nm', 'maximum wavelength')
-      allocate(self%lambda(self%nlambda))
-      do l = 1, self%nlambda
-         self%lambda(l) = lambda_min + (l - 1) * (lambda_max - lambda_min) / (self%nlambda - 1)
+      call self%get_parameter(self%nlambda, 'nlambda', '', 'number of wavebands')
+      call self%get_parameter(lambda_min, 'lambda_min', 'nm', 'minimum wavelength', minimum=0._rk)
+      call self%get_parameter(lambda_max, 'lambda_max', 'nm', 'maximum wavelength', minimum=0._rk)
+      allocate(self%lambda(self%nlambda), self%lambda_bounds(self%nlambda + 1))
+      do l = 1, self%nlambda + 1
+         self%lambda_bounds(l) = lambda_min + (l - 1) * (lambda_max - lambda_min) / self%nlambda
       end do
+      self%lambda = (self%lambda_bounds(1:self%nlambda) + self%lambda_bounds(2:self%nlambda + 1)) / 2
       call self%get_parameter(save_spectra, 'save_spectra', '', 'save full spectral irradiance', default=.false.)
 
       ! Find wavelength bounds of photosynthetically active radiation
@@ -123,14 +124,23 @@ contains
       call interp(nlambda_oasim, lambda_oasim, a_v_oasim, self%nlambda, self%lambda, self%a_v)
       call interp(nlambda_oasim, lambda_oasim, a_u_oasim, self%nlambda, self%lambda, self%a_u)
 
+      ! Protect against negative absorption coefficients produced by linear extrapolation
+      self%a_o = max(0._rk, self%a_o)
+      self%a_v = max(0._rk, self%a_v)
+      self%a_u = max(0._rk, self%a_u)
+
       ! Wavelength dependence of foam reflectance (Eqs A11, A10 Gregg & Casey 2009)
       allocate(self%F(self%nlambda))
       do l = 1, self%nlambda
          if (self%lambda(l) < 900) then
+            ! Note: close to 900 nm the expression below returns negative values.
+            ! We clip to zero in line with Fig A1 Gregg & Casey 2009
             log_T_w = -(self%a_w(l) + 0.5_rk * self%b_w(l))
-            self%F(l) = a0 + a1 * log_T_w + a2 * log_T_w**2 + a3 * log_T_w**3
+            self%F(l) = max(0._rk, a0 + a1 * log_T_w + a2 * log_T_w**2 + a3 * log_T_w**3)
          else
-            self%F(l) = b0 + b1 * self%lambda(l) + b2 * self%lambda(l)**2 + b3 * self%lambda(l)**3
+            ! Note: above 1700 nm the expression below returns negative values.
+            ! We clip to zero in line with Fig A1 Gregg & Casey 2009
+            self%F(l) = max(0._rk, b0 + b1 * self%lambda(l) + b2 * self%lambda(l)**2 + b3 * self%lambda(l)**3)
          end if
       end do
 
@@ -174,8 +184,8 @@ contains
       real(rk) :: M, M_prime, M_oz
       real(rk) :: O3
       real(rk), dimension(self%nlambda) :: direct, diffuse, spectrum  ! Spectra at top of the water column (with refraction and reflection accounted for)
-      real(rk) :: par_J, swr_J, uv_J, par_E
-      real(rk), dimension(self%nlambda) :: tau_a, F_a, omega_a, T_a, T_oz, T_w, T_u, T_r, T_aa, T_as
+      real(rk) :: par_J, swr_J, uv_J, par_E, F_a, omega_a
+      real(rk), dimension(self%nlambda) :: tau_a, T_a, T_oz, T_w, T_u, T_r, T_aa, T_as
       real(rk), dimension(self%nlambda) :: T_g, T_dclr, T_sclr, T_dcld, T_scld
       real(rk), dimension(self%nlambda) :: rho_d, rho_s
 
@@ -198,7 +208,7 @@ contains
           O3 = O3 * (1000 / 48._rk) / 0.4462_rk ! from kg m-2 to mol m-2, then from mol m-2 to atm cm (Basher 1982)
           days = floor(yearday) + 1.0_rk
           hour = mod(yearday, 1.0_rk) * 24.0_rk
-         
+
           ! Calculate zenith angle (in radians)
           theta = zenith_angle(days, hour, longitude, latitude)
           theta = min(theta, 0.5_rk * pi)  ! Restrict the input zenith angle between 0 and pi/2
@@ -212,7 +222,6 @@ contains
           M_prime = M * airpres / pres0
 
          ! Atmospheric path length for ozone
-         !mo = 35._rk/sqrt(1224._rk*cos(zen)**2 + 1._rk)               ! Eq 9, Bird 1984 
          ! Eq 10, Bird & Riordan 1986, Eq 14 Gregg & Carder 1990; NB 6370 is the earth's radius in km
          ! See also Tomasi et al. 1998 Eq 5
          M_oz = (1._rk + H_oz / 6370._rk) / sqrt(costheta**2 + 2 * H_oz / 6370._rk)
@@ -225,12 +234,16 @@ contains
          T_w = exp((-0.2385_rk * self%a_v * WV * M) / (1._rk + 20.07_rk * self%a_v * WV * M)**0.45_rk)
 
          ! Transmittance due to uniformly mixed gas absorption - SHOULD use pressure corrected airmass
-         ! Eq 10 Bird 1984, Eq 11, Bird and Riordan 1986, Eq 18 Gregg & Carder 1990
+         ! Eq 10 Bird 1984, Eq 11 Bird and Riordan 1986, Eq 18 Gregg & Carder 1990
          ! Bird & Riordan use 118.93 rather than 118.3, but state 118.3 should be used in the future.
          T_u = exp(-1.41_rk * self%a_u * M_prime / (1._rk + 118.3_rk * self%a_u * M_prime)**0.45_rk)
 
-         ! Transmittance terms that apply for cloudy and clear skies.
+         ! Transmittance terms that apply for both cloudy and clear skies.
          T_g = T_oz * T_w * T_u
+
+         ! -------------------
+         ! clear skies part
+         ! -------------------
 
          ! Transmittance due to Rayleigh scattering (Eq 2 Bird 1984, Eq 4 Bird & Riordan 1986, Eq 15 Gregg & Carder 1990)
          T_r = exp(-M_prime / (115.6406_rk * self%lambda**4 - 1.335_rk * self%lambda**2))
@@ -246,6 +259,10 @@ contains
          T_aa = exp(-(1._rk - omega_a) * tau_a * M)
          T_as = exp(-omega_a * tau_a * M)
          T_sclr = T_aa * 0.5_rk * (1._rk - T_r**0.95_rk) + T_r**1.5_rk * T_aa * F_a * (1 - T_as)
+
+         ! -------------------
+         ! cloudy skies part
+         ! -------------------
 
          ! Transmittance due to absorption and scattering by clouds
          call slingo(costheta, LWP * 1000, r_e, self%nlambda, self%lambda, T_dcld, T_scld)
@@ -460,7 +477,7 @@ contains
       real(rk), intent(in) :: AM, WM, W, RH, V, costheta
       integer, intent(in) :: nlambda
       real(rk), intent(in) :: lambda(nlambda)
-      real(rk), intent(out), dimension(nlambda) :: tau_a, F_a, omega_a
+      real(rk), intent(out) :: tau_a(nlambda), F_a, omega_a
 
       real(rk), parameter :: R = 0.05_rk
       integer, parameter :: nr = 3, nr_eval = 3
@@ -503,13 +520,13 @@ contains
       tau_a550 = c_a550 * H_a
       beta = tau_a550 * 550._rk**alpha
 
-      ! Extinction coefficient
+      ! Aerosol optical thickness (Eq 27 Gregg & Carder 1990)
       tau_a = beta * lambda**(-alpha)
 
       ! Asymmetry parameter (Eq 35 Gregg & Carder 1990) - called alpha in Gregg & Casey 2009
       cos_theta_bar = -0.1417_rk * min(max(0._rk, alpha), 1.2_rk) + 0.82_rk
 
-      ! Forward scattering probability (Eq 31-34 Gregg & Carder 1990)
+      ! Forward scattering probability (Eqs 31-34 Gregg & Carder 1990)
       ! NB B1-B3 are A, B, C in Gregg & Casey 2009 Eqs 3-6
       ! NB B1-B3 are AFS, BFS, ALG in Bird & Riordan 1986 Eqs 22-26
       B3 = log(1._rk - cos_theta_bar)
