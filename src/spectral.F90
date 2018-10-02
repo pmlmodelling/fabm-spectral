@@ -95,7 +95,7 @@ contains
       call self%register_dependency(self%id_airpres, standard_variables%surface_air_pressure)
       call self%register_dependency(self%id_yearday, standard_variables%number_of_days_since_start_of_the_year)
       call self%register_dependency(self%id_h, standard_variables%cell_thickness)
-      call self%register_dependency(self%id_relhum, type_horizontal_standard_variable('relative_humidity'))
+      call self%register_dependency(self%id_relhum, type_horizontal_standard_variable('relative_humidity', '-'))
       call self%register_dependency(self%id_lwp, type_horizontal_standard_variable('atmosphere_mass_content_of_cloud_liquid_water', 'kg m-2'))
       call self%register_dependency(self%id_O3, type_horizontal_standard_variable('atmosphere_mass_content_of_ozone', 'kg m-2'))
       call self%register_dependency(self%id_WV, type_horizontal_standard_variable('atmosphere_mass_content_of_water_vapor', 'kg m-2'))
@@ -198,7 +198,7 @@ contains
           O3 = O3 * (1000 / 48._rk) / 0.4462_rk ! from kg m-2 to mol m-2, then from mol m-2 to atm cm (Basher 1982)
           days = floor(yearday) + 1.0_rk
           hour = mod(yearday, 1.0_rk) * 24.0_rk
-
+         
           ! Calculate zenith angle (in radians)
           theta = zenith_angle(days, hour, longitude, latitude)
           theta = min(theta, 0.5_rk * pi)  ! Restrict the input zenith angle between 0 and pi/2
@@ -251,30 +251,30 @@ contains
          call slingo(costheta, LWP * 1000, r_e, self%nlambda, self%lambda, T_dcld, T_scld)
 
          ! Sea surface reflectance
-          call reflectance(self%nlambda, self%F, theta, wind_speed, rho_d, rho_s)
+         call reflectance(self%nlambda, self%F, theta, wind_speed, rho_d, rho_s)
 
-          ! Diffuse and direct irradiance streams (Eqs 1, 2 Gregg & Casey 2009)
-          ! These combine terms for clear and cloudy skies, weighted by cloud cover fraction
-          ! They also incorporate the loss due to reflectance
-          direct = self%exter * costheta * T_g * ((1._rk - cloud_cover) * T_dclr + cloud_cover * T_dcld) * (1._rk - rho_d)
-          diffuse = self%exter * costheta * T_g * ((1._rk - cloud_cover) * T_sclr + cloud_cover * T_scld) * (1._rk - rho_s)
+         ! Diffuse and direct irradiance streams (Eqs 1, 2 Gregg & Casey 2009)
+         ! These combine terms for clear and cloudy skies, weighted by cloud cover fraction
+         ! They also incorporate the loss due to reflectance
+         direct = self%exter * costheta * T_g * ((1._rk - cloud_cover) * T_dclr + cloud_cover * T_dcld) * (1._rk - rho_d)
+         diffuse = self%exter * costheta * T_g * ((1._rk - cloud_cover) * T_sclr + cloud_cover * T_scld) * (1._rk - rho_s)
 
-          if (allocated(self%id_surface_band_dir)) then
-             do l = 1, self%nlambda
-                _SET_HORIZONTAL_DIAGNOSTIC_(self%id_surface_band_dir(l), direct(l))
-                _SET_HORIZONTAL_DIAGNOSTIC_(self%id_surface_band_dif(l), diffuse(l))
-             end do
-          end if
+         if (allocated(self%id_surface_band_dir)) then
+            do l = 1, self%nlambda
+               _SET_HORIZONTAL_DIAGNOSTIC_(self%id_surface_band_dir(l), direct(l))
+               _SET_HORIZONTAL_DIAGNOSTIC_(self%id_surface_band_dif(l), diffuse(l))
+            end do
+         end if
 
-          spectrum = direct + diffuse
-          par_J = sum(self%par_weights * spectrum)
-          swr_J = sum(self%swr_weights * spectrum)
-          par_E = sum(self%par_weights * spectrum * self%lambda)
-          uv_J  = sum(self%uv_weights * spectrum)
-          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_sf, par_J) ! Photosynthetically Active Radiation (W/m2)
-          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_E_sf,par_E/(Planck*lightspeed)/Avogadro*1e-3_rk) ! Photosynthetically Active Radiation (umol/m2/s) - divide by 1e9 to go from nm to m, multiply by 1e6 to go from mol to umol
-          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_sf,  swr_J) ! Total shortwave radiation (W/m2) [up to 4000 nm]
-          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_uv, uv_J)       ! UV (W/m2)
+         spectrum = direct + diffuse
+         par_J = sum(self%par_weights * spectrum)
+         swr_J = sum(self%swr_weights * spectrum)
+         par_E = sum(self%par_weights * spectrum * self%lambda)
+         uv_J  = sum(self%uv_weights * spectrum)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_sf, par_J) ! Photosynthetically Active Radiation (W/m2)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_E_sf,par_E/(Planck*lightspeed)/Avogadro*1e-3_rk) ! Photosynthetically Active Radiation (umol/m2/s) - divide by 1e9 to go from nm to m, multiply by 1e6 to go from mol to umol
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_sf,  swr_J) ! Total shortwave radiation (W/m2) [up to 4000 nm]
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_uv, uv_J)       ! UV (W/m2)
 
       _HORIZONTAL_LOOP_END_
 
