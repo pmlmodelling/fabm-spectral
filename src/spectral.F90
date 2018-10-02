@@ -55,7 +55,7 @@ contains
       integer,               intent(in)            :: configunit
 
       integer :: l
-      integer :: lambda_method, exter_source
+      integer :: lambda_method
       real(rk) :: lambda_min, lambda_max
       logical :: save_spectra
       character(len=8) :: strwavelength
