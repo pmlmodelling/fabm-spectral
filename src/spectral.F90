@@ -17,7 +17,7 @@ module fabm_spectral
 
    type,extends(type_base_model), public :: type_spectral
       type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E
-      type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf
+      type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf_w, id_par_sf_w, id_uv_sf_w, id_par_E_sf_w
       type (type_horizontal_dependency_id) :: id_lon, id_lat, id_cloud, id_wind_speed, id_airpres, id_relhum, id_lwp, id_O3, id_WV, id_mean_wind_speed, id_visibility, id_air_mass_type
       type (type_global_dependency_id) :: id_yearday
@@ -60,7 +60,7 @@ contains
       integer :: lambda_method
       real(rk) :: lambda_min, lambda_max
       logical :: save_spectra
-      character(len=8) :: strwavelength
+      character(len=8) :: strwavelength, strindex
 
       integer, parameter :: exter_source = 2
 
@@ -128,6 +128,7 @@ contains
       !call self%register_diagnostic_variable(self%id_par, 'par',     'W/m^2',     'photosynthetically active radiation')
       !call self%register_diagnostic_variable(self%id_par_E, 'par_E', 'umol/m^2/s','photosynthetic photon flux density')
       call self%register_diagnostic_variable(self%id_swr_sf, 'swr_sf',     'W/m^2',     'downward shortwave radiation in air')
+      call self%register_diagnostic_variable(self%id_swr_dif_sf, 'swr_dif_sf',     'W/m^2', 'downward diffuse shortwave radiation in air')
       call self%register_diagnostic_variable(self%id_uv_sf,  'uv_sf',      'W/m^2',     'downward ultraviolet radiative flux in air')
       call self%register_diagnostic_variable(self%id_par_sf, 'par_sf',     'W/m^2',     'downward photosynthetically active radiation in air')
       call self%register_diagnostic_variable(self%id_par_E_sf, 'par_E_sf', 'umol/m^2/s','downward photosynthetic photon flux density in air')
@@ -182,10 +183,11 @@ contains
             else
                write(strwavelength, '(f6.1)') self%lambda(l)
             end if
-            call self%register_diagnostic_variable(self%id_surface_band_dir(l), 'irradiance_dir_sf_' // trim(strwavelength), 'W/m2/nm', 'net direct irradiance in air @ ' // trim(strwavelength) // ' nm')
-            call self%register_diagnostic_variable(self%id_surface_band_dif(l), 'irradiance_dif_sf_' // trim(strwavelength), 'W/m2/nm', 'net diffuse irradiance in air @ ' // trim(strwavelength) // ' nm')
-            call self%register_diagnostic_variable(self%id_band_dir(l), 'irradiance_dir_' // trim(strwavelength), 'W/m2/nm', 'direct irradiance @ ' // trim(strwavelength) // ' nm')
-            call self%register_diagnostic_variable(self%id_band_dif(l), 'irradiance_dif_' // trim(strwavelength), 'W/m2/nm', 'diffuse irradiance @ ' // trim(strwavelength) // ' nm')
+            write(strindex, '(i0)') l
+            call self%register_diagnostic_variable(self%id_surface_band_dir(l), 'dir_sf_band' // trim(strindex), 'W/m2/nm', 'downward direct irradiance in air @ ' // trim(strwavelength) // ' nm')
+            call self%register_diagnostic_variable(self%id_surface_band_dif(l), 'dif_sf_band' // trim(strindex), 'W/m2/nm', 'downward diffuse irradiance in air @ ' // trim(strwavelength) // ' nm')
+            !call self%register_diagnostic_variable(self%id_band_dir(l), 'dir_band' // trim(strindex), 'W/m2/nm', 'direct irradiance @ ' // trim(strwavelength) // ' nm')
+            !call self%register_diagnostic_variable(self%id_band_dif(l), 'dif_band' // trim(strindex), 'W/m2/nm', 'diffuse irradiance @ ' // trim(strwavelength) // ' nm')
          end do
       end if
    end subroutine initialize
@@ -288,7 +290,7 @@ contains
          ! -------------------
 
          ! Transmittance due to absorption and scattering by clouds
-         call slingo(costheta, LWP * 1000, r_e, self%nlambda, self%lambda, T_dcld, T_scld)
+         call slingo(costheta, max(0._rk, LWP) * 1000, r_e, self%nlambda, self%lambda, T_dcld, T_scld)
 
          ! Diffuse and direct irradiance streams (Eqs 1, 2 Gregg & Casey 2009)
          ! These combine terms for clear and cloudy skies, weighted by cloud cover fraction
@@ -305,13 +307,8 @@ contains
          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_sf,  swr_J) ! Total shortwave radiation (W/m2) [up to 4000 nm]
          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_uv_sf, uv_J)    ! UV (W/m2)
 
-         ! Sea surface reflectance
-         call reflectance(self%nlambda, self%F, theta, wind_speed, rho_d, rho_s)
-
-         ! Incorporate the loss due to reflectance
-         direct = direct * (1._rk - rho_d)
-         diffuse = diffuse * (1._rk - rho_s)
-         spectrum = direct + diffuse
+         swr_J = sum(self%swr_weights * diffuse)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_dif_sf, swr_J)
 
          if (allocated(self%id_surface_band_dir)) then
             do l = 1, self%nlambda
@@ -319,6 +316,14 @@ contains
                _SET_HORIZONTAL_DIAGNOSTIC_(self%id_surface_band_dif(l), diffuse(l))
             end do
          end if
+
+         ! Sea surface reflectance
+         call reflectance(self%nlambda, self%F, theta, wind_speed, rho_d, rho_s)
+
+         ! Incorporate the loss due to reflectance
+         direct = direct * (1._rk - rho_d)
+         diffuse = diffuse * (1._rk - rho_s)
+         spectrum = direct + diffuse
 
          par_J = sum(self%par_weights * spectrum)
          swr_J = sum(self%swr_weights * spectrum)
