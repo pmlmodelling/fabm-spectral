@@ -591,6 +591,7 @@ contains
       real(rk), parameter :: D3 = 4.5e-5_rk
       real(rk), parameter :: D4 = 4.0e-5_rk
 
+      ! Refractive index of seawater, Gregg and Carder 1990 p1667
       real(rk), parameter :: n_w = 1.341_rk
 
       real(rk) :: C_D, rho_f_W, rho_f(nlambda)
@@ -618,17 +619,17 @@ contains
       ! Final wavelength and wind speed-dependent foam reflectance
       rho_f = rho_f_W * F
 
-      ! Calculate zenith angle (radians) inside the water, taking refraction into account
-      theta_r = asin(sin(theta) / n_w)              ! Refractive index of seawater = 1.341, Gregg and Carder 1990
+      ! Calculate zenith angle (radians) inside the water, taking refraction into account: Snell's law
+      theta_r = asin(sin(theta) / n_w)
 
-      ! Direct light specular component (Eqs 46, 47 Gregg and Carder 1990)
+      ! Direct light specular component
       if (theta * rad2deg >= 40._rk .and. W > 2._rk) then
-         ! Wind speed dependant
+         ! Wind speed dependant (Eqs 46, 47 Gregg and Carder 1990)
          b = -7.14e-4_rk * W + 0.0618_rk
          rho_dsp =  0.0253_rk * exp(b * (theta * rad2deg - 40._rk))
       else
-         ! Fresnel's Law
-         rho_dsp = 0.5_rk * (sin(theta - theta_r)**2 / sin(theta + theta_r)**2 + tan(theta - theta_r)**2 / tan(theta + theta_r)**2) ! Eq 44 Gregg and Carder 1990 - note: contains typo (internal 1/2), see Kirk 3rd ed 2011, p 46
+         ! Fresnel's Law, Eq 44 Gregg and Carder 1990 - note: contains typo (internal 1/2), see Kirk 3rd ed 2011, p 46
+         rho_dsp = 0.5_rk * (sin(theta - theta_r)**2 / sin(theta + theta_r)**2 + tan(theta - theta_r)**2 / tan(theta + theta_r)**2)
       end if 
 
       ! Diffuse light specular component (p 1667 Gregg and Carder 1990)
