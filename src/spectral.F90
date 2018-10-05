@@ -19,6 +19,7 @@ module fabm_spectral
       type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf_w, id_par_sf_w, id_uv_sf_w, id_par_E_sf_w
+      type (type_horizontal_diagnostic_variable_id) :: id_tau_a550, id_omega_a, id_alpha_a
       type (type_horizontal_dependency_id) :: id_lon, id_lat, id_cloud, id_wind_speed, id_airpres, id_relhum, id_lwp, id_O3, id_WV, id_mean_wind_speed, id_visibility, id_air_mass_type
       type (type_global_dependency_id) :: id_yearday
       type (type_dependency_id) :: id_h
@@ -137,6 +138,10 @@ contains
       call self%register_diagnostic_variable(self%id_par_sf_w, 'par_sf_w',     'W/m^2',     'downward photosynthetically active radiation in water')
       call self%register_diagnostic_variable(self%id_par_E_sf_w, 'par_E_sf_w', 'umol/m^2/s','downward photosynthetic photon flux density in water')
 
+      call self%register_diagnostic_variable(self%id_tau_a550, 'tau_a550', '-', 'optical thickness of aerosols at 550 nm')
+      call self%register_diagnostic_variable(self%id_omega_a, 'omega_a', '-', 'single scattering albedo of aerosols')
+      call self%register_diagnostic_variable(self%id_alpha_a, 'alpha_a', '-', 'Angstrom exponent of aerosol distribution')
+
       ! Interpolate absorption and scattering spectra to user wavelength grid
       allocate(self%a_w(self%nlambda), self%b_w(self%nlambda))
       call interp(nlambda_w, lambda_w, a_w, self%nlambda, self%lambda, self%a_w)
@@ -204,7 +209,7 @@ contains
       real(rk), parameter :: r_e = (10._rk + 11.8_rk) / 2 ! equivalent radius of cloud drop size distribution (um) based on mean of Kiehl et al. & Han et al. (cf OASIM)
 
       real(rk) :: longitude, latitude, yearday, cloud_cover, wind_speed, airpres, relhum, LWP, water_vapour, WV, WM, visibility, AM
-      real(rk) :: days, hour, theta, costheta
+      real(rk) :: days, hour, theta, costheta, alpha_a, tau_a550
       integer :: l
       real(rk) :: M, M_prime, M_oz
       real(rk) :: O3
@@ -274,7 +279,7 @@ contains
          T_r = exp(-M_prime / (115.6406_rk * self%lambda**4 - 1.335_rk * self%lambda**2))
 
          ! Transmittance due to aerosol absorption (Eq 26 Gregg & Carder 1990)
-         call navy_aerol_model(AM, WM, wind_speed, relhum, visibility, costheta, self%nlambda, self%lambda, tau_a, F_a, omega_a)
+         call navy_aerol_model(AM, WM, wind_speed, relhum, visibility, costheta, self%nlambda, self%lambda, tau_a, F_a, omega_a, alpha_a, tau_a550)
          T_a = exp(-tau_a * M)
 
          ! Direct transmittance
@@ -284,6 +289,10 @@ contains
          T_aa = exp(-(1._rk - omega_a) * tau_a * M)
          T_as = exp(-omega_a * tau_a * M)
          T_sclr = T_aa * 0.5_rk * (1._rk - T_r**0.95_rk) + T_r**1.5_rk * T_aa * F_a * (1 - T_as)
+
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_tau_a550, tau_a550)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_omega_a, omega_a)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_alpha_a, alpha_a)
 
          ! -------------------
          ! cloudy skies part
@@ -507,7 +516,7 @@ contains
       targety(:) = y(:,i) + frac*(y(:,i+1)-y(:,i))
    end subroutine
 
-   subroutine navy_aerol_model(AM, WM, W, RH, V, costheta, nlambda, lambda, tau_a, F_a, omega_a)
+   subroutine navy_aerol_model(AM, WM, W, RH, V, costheta, nlambda, lambda, tau_a, F_a, omega_a, alpha, tau_a550)
       ! AM: air-mass type (1 = marine aerosol-dominated, 10 continental aerosol-dominated)
       ! WM: wind speed averaged over past 24 h (m s-1)
       ! W: instantaneous wind speed (m s-1)
@@ -518,7 +527,7 @@ contains
       real(rk), intent(in) :: AM, WM, W, RH, V, costheta
       integer, intent(in) :: nlambda
       real(rk), intent(in) :: lambda(nlambda)
-      real(rk), intent(out) :: tau_a(nlambda), F_a, omega_a
+      real(rk), intent(out) :: tau_a(nlambda), F_a, omega_a, alpha, tau_a550
 
       real(rk), parameter :: R = 0.05_rk
       integer, parameter :: nr = 3, nr_eval = 3
@@ -526,10 +535,10 @@ contains
       real(rk), parameter :: H_a = 1000._rk ! Aerosol scale height (m) Gregg & Carder 1990 p1665
       real(rk), parameter :: r_eval(nr_eval) = (/0.1_rk, 1._rk, 10._rk/)
 
-      real(rk) :: relhum, A(nr), f, gamma, alpha, beta
+      real(rk) :: relhum, A(nr), f, gamma, beta
       real(rk) :: y(nr_eval), x(nr_eval), xsum, ysum
       integer :: i
-      real(rk) :: c_a550, tau_a550
+      real(rk) :: c_a550
       real(rk) :: B1, B2, B3, cos_theta_bar
 
       relhum = min(0.999_rk, RH)
