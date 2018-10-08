@@ -1,0 +1,1 @@
+https://rredc.nrel.gov/solar/pubs/spectral/model/t2-1.html
