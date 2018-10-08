@@ -19,7 +19,7 @@ module fabm_spectral
       type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf_w, id_par_sf_w, id_uv_sf_w, id_par_E_sf_w
-      type (type_horizontal_diagnostic_variable_id) :: id_tau_a550, id_omega_a, id_alpha_a
+      type (type_horizontal_diagnostic_variable_id) :: id_tau_a550, id_omega_a, id_alpha_a, id_F_a
       type (type_horizontal_dependency_id) :: id_lon, id_lat, id_cloud, id_wind_speed, id_airpres, id_relhum, id_lwp, id_O3, id_WV, id_mean_wind_speed, id_visibility, id_air_mass_type
       type (type_global_dependency_id) :: id_yearday
       type (type_dependency_id) :: id_h
@@ -138,9 +138,10 @@ contains
       call self%register_diagnostic_variable(self%id_par_sf_w, 'par_sf_w',     'W/m^2',     'downward photosynthetically active radiation in water')
       call self%register_diagnostic_variable(self%id_par_E_sf_w, 'par_E_sf_w', 'umol/m^2/s','downward photosynthetic photon flux density in water')
 
-      call self%register_diagnostic_variable(self%id_tau_a550, 'tau_a550', '-', 'optical thickness of aerosols at 550 nm')
-      call self%register_diagnostic_variable(self%id_omega_a, 'omega_a', '-', 'single scattering albedo of aerosols')
-      call self%register_diagnostic_variable(self%id_alpha_a, 'alpha_a', '-', 'Angstrom exponent of aerosol distribution')
+      call self%register_diagnostic_variable(self%id_tau_a550, 'tau_a550', '-', 'aerosol optical thickness at 550 nm')
+      call self%register_diagnostic_variable(self%id_omega_a, 'omega_a', '-', 'aerosol single scattering albedo')
+      call self%register_diagnostic_variable(self%id_alpha_a, 'alpha_a', '-', 'aerosol Angstrom exponent')
+      call self%register_diagnostic_variable(self%id_F_a, 'F_a', '-', 'aerosol forward scattering probability')
 
       ! Interpolate absorption and scattering spectra to user wavelength grid
       allocate(self%a_w(self%nlambda), self%b_w(self%nlambda))
@@ -293,6 +294,7 @@ contains
          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_tau_a550, tau_a550)
          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_omega_a, omega_a)
          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_alpha_a, alpha_a)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_F_a, F_a)
 
          ! -------------------
          ! cloudy skies part
@@ -582,7 +584,7 @@ contains
       B3 = log(1._rk - cos_theta_bar)
       B1 = B3 * (1.4590_rk + B3 * ( 0.1595_rk + 0.4129_rk * B3))
       B2 = B3 * (0.0783_rk + B3 * (-0.3824_rk - 0.5874_rk * B3))
-      F_a = 1._rk - 0.5_rk * exp(B1 + B2 * costheta * costheta)
+      F_a = 1._rk - 0.5_rk * exp((B1 + B2 * costheta) * costheta)
 
       ! Single scattering albedo (Eq 36 Gregg & Carder 1990)
       omega_a = (-0.0032_rk * AM + 0.972_rk) * exp(3.06e-2_rk * relhum)
