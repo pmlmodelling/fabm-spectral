@@ -19,7 +19,7 @@ module fabm_spectral
       type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf_w, id_par_sf_w, id_uv_sf_w, id_par_E_sf_w
-      type (type_horizontal_diagnostic_variable_id) :: id_tau_a550, id_omega_a, id_alpha_a, id_F_a
+      type (type_horizontal_diagnostic_variable_id) :: id_alpha_a, id_beta_a, id_omega_a, id_F_a
       type (type_horizontal_dependency_id) :: id_lon, id_lat, id_cloud, id_wind_speed, id_airpres, id_relhum, id_lwp, id_O3, id_WV, id_mean_wind_speed, id_visibility, id_air_mass_type
       type (type_global_dependency_id) :: id_yearday
       type (type_dependency_id) :: id_h
@@ -28,7 +28,7 @@ module fabm_spectral
       type (type_diagnostic_variable_id), dimension(:), allocatable :: id_band_dir, id_band_dif
       real(rk), dimension(:), allocatable :: lambda, lambda_bounds, par_weights, par_E_weights, swr_weights, uv_weights, F
       real(rk), dimension(:), allocatable :: exter
-      real(rk), dimension(:), allocatable :: a_o, a_u, a_v
+      real(rk), dimension(:), allocatable :: a_o, a_u, a_v, tau_r
       real(rk), dimension(:), allocatable :: a_w, b_w
    contains
       procedure :: initialize
@@ -138,9 +138,9 @@ contains
       call self%register_diagnostic_variable(self%id_par_sf_w, 'par_sf_w',     'W/m^2',     'downward photosynthetically active radiation in water')
       call self%register_diagnostic_variable(self%id_par_E_sf_w, 'par_E_sf_w', 'umol/m^2/s','downward photosynthetic photon flux density in water')
 
-      call self%register_diagnostic_variable(self%id_tau_a550, 'tau_a550', '-', 'aerosol optical thickness at 550 nm')
-      call self%register_diagnostic_variable(self%id_omega_a, 'omega_a', '-', 'aerosol single scattering albedo')
       call self%register_diagnostic_variable(self%id_alpha_a, 'alpha_a', '-', 'aerosol Angstrom exponent')
+      call self%register_diagnostic_variable(self%id_beta_a, 'beta_a', '-', 'aerosol scale factor for optical thickness')
+      call self%register_diagnostic_variable(self%id_omega_a, 'omega_a', '-', 'aerosol single scattering albedo')
       call self%register_diagnostic_variable(self%id_F_a, 'F_a', '-', 'aerosol forward scattering probability')
 
       ! Interpolate absorption and scattering spectra to user wavelength grid
@@ -148,7 +148,7 @@ contains
       call interp(nlambda_w, lambda_w, a_w, self%nlambda, self%lambda, self%a_w)
       call interp(nlambda_w, lambda_w, b_w, self%nlambda, self%lambda, self%b_w)
 
-      allocate(self%exter(self%nlambda), self%a_o(self%nlambda), self%a_v(self%nlambda), self%a_u(self%nlambda))
+      allocate(self%exter(self%nlambda), self%a_o(self%nlambda), self%a_v(self%nlambda), self%a_u(self%nlambda), self%tau_r(self%nlambda))
       if (exter_source == 1) then
          call interp(nlambda_oasim, lambda_oasim, ET_oasim, self%nlambda, self%lambda, self%exter)
       else
@@ -157,6 +157,10 @@ contains
       call interp(nlambda_oasim, lambda_oasim, a_o_oasim, self%nlambda, self%lambda, self%a_o)
       call interp(nlambda_oasim, lambda_oasim, a_v_oasim, self%nlambda, self%lambda, self%a_v)
       call interp(nlambda_oasim, lambda_oasim, a_u_oasim, self%nlambda, self%lambda, self%a_u)
+
+      ! Rayleigh optical thickness (Eq 2 Bird 1984, Eq 4 Bird & Riordan 1986, Eq 15 Gregg & Carder 1990)
+      !self%tau_r = 1.0_rk / (115.6406_rk * self%lambda**4 - 1.335_rk * self%lambda**2)
+      call interp(nlambda_oasim, lambda_oasim, tau_r_oasim, self%nlambda, self%lambda, self%tau_r)
 
       ! Protect against negative absorption coefficients produced by linear extrapolation
       self%a_o = max(0._rk, self%a_o)
@@ -210,7 +214,7 @@ contains
       real(rk), parameter :: r_e = (10._rk + 11.8_rk) / 2 ! equivalent radius of cloud drop size distribution (um) based on mean of Kiehl et al. & Han et al. (cf OASIM)
 
       real(rk) :: longitude, latitude, yearday, cloud_cover, wind_speed, airpres, relhum, LWP, water_vapour, WV, WM, visibility, AM
-      real(rk) :: days, hour, theta, costheta, alpha_a, tau_a550
+      real(rk) :: days, hour, theta, costheta, alpha_a, beta_a
       integer :: l
       real(rk) :: M, M_prime, M_oz
       real(rk) :: O3
@@ -276,11 +280,12 @@ contains
          ! clear skies part
          ! -------------------
 
-         ! Transmittance due to Rayleigh scattering (Eq 2 Bird 1984, Eq 4 Bird & Riordan 1986, Eq 15 Gregg & Carder 1990)
-         T_r = exp(-M_prime / (115.6406_rk * self%lambda**4 - 1.335_rk * self%lambda**2))
+         ! Transmittance due to Rayleigh scattering (use precomputed optical thickness)
+         T_r = exp(-M_prime * self%tau_r)
 
          ! Transmittance due to aerosol absorption (Eq 26 Gregg & Carder 1990)
-         call navy_aerol_model(AM, WM, wind_speed, relhum, visibility, costheta, self%nlambda, self%lambda, tau_a, F_a, omega_a, alpha_a, tau_a550)
+         call navy_aerol_model(AM, WM, wind_speed, relhum, visibility, costheta, alpha_a, beta_a, F_a, omega_a)
+         tau_a = beta_a * self%lambda**(-alpha_a)
          T_a = exp(-tau_a * M)
 
          ! Direct transmittance
@@ -291,9 +296,9 @@ contains
          T_as = exp(-omega_a * tau_a * M)
          T_sclr = T_aa * 0.5_rk * (1._rk - T_r**0.95_rk) + T_r**1.5_rk * T_aa * F_a * (1 - T_as)
 
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_tau_a550, tau_a550)
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_omega_a, omega_a)
          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_alpha_a, alpha_a)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_beta_a, beta_a)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_omega_a, omega_a)
          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_F_a, F_a)
 
          ! -------------------
@@ -518,18 +523,19 @@ contains
       targety(:) = y(:,i) + frac*(y(:,i+1)-y(:,i))
    end subroutine
 
-   subroutine navy_aerol_model(AM, WM, W, RH, V, costheta, nlambda, lambda, tau_a, F_a, omega_a, alpha, tau_a550)
+   subroutine navy_aerol_model(AM, WM, W, RH, V, costheta, alpha, beta, F_a, omega_a)
       ! AM: air-mass type (1 = marine aerosol-dominated, 10 continental aerosol-dominated)
       ! WM: wind speed averaged over past 24 h (m s-1)
       ! W: instantaneous wind speed (m s-1)
       ! RH: relative humidity (-)
       ! V: visibility (m)
-      ! theta: zenith angle (radians)
-      ! lambda: wave lengths (nm)
+      ! costheta: cosine of zenith angle
+      ! alpha: Angstrom exponent. NB optical thickness tau = beta * lambda**(-alpha)
+      ! beta: scale factor for optical thickness
+      ! F_a: forward scattering probability
+      ! omega_a: single scattering albedo
       real(rk), intent(in) :: AM, WM, W, RH, V, costheta
-      integer, intent(in) :: nlambda
-      real(rk), intent(in) :: lambda(nlambda)
-      real(rk), intent(out) :: tau_a(nlambda), F_a, omega_a, alpha, tau_a550
+      real(rk), intent(out) :: alpha, beta, F_a, omega_a
 
       real(rk), parameter :: R = 0.05_rk
       integer, parameter :: nr = 3, nr_eval = 3
@@ -537,7 +543,7 @@ contains
       real(rk), parameter :: H_a = 1000._rk ! Aerosol scale height (m) Gregg & Carder 1990 p1665
       real(rk), parameter :: r_eval(nr_eval) = (/0.1_rk, 1._rk, 10._rk/)
 
-      real(rk) :: relhum, A(nr), f, gamma, beta
+      real(rk) :: relhum, A(nr), f, gamma, tau_a550
       real(rk) :: y(nr_eval), x(nr_eval), xsum, ysum
       integer :: i
       real(rk) :: c_a550
@@ -572,9 +578,6 @@ contains
       tau_a550 = c_a550 * H_a
       beta = tau_a550 * 550._rk**alpha
 
-      ! Aerosol optical thickness (Eq 27 Gregg & Carder 1990)
-      tau_a = beta * lambda**(-alpha)
-
       ! Asymmetry parameter (Eq 35 Gregg & Carder 1990) - called alpha in Gregg & Casey 2009
       cos_theta_bar = -0.1417_rk * min(max(0._rk, alpha), 1.2_rk) + 0.82_rk
 
@@ -607,7 +610,6 @@ contains
 
       real(rk) :: C_D, rho_f_W, rho_f(nlambda)
       real(rk) :: theta_r, b, rho_dsp, rho_ssp
-      integer :: l
 
       ! Drag coefficient (Eqs 42, 43 Gregg and Carder 1990)
       if (W <= 0._rk) then

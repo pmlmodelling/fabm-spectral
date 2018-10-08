@@ -29,5 +29,5 @@ lambda_min *= 1000
 lambda_max *= 1000
 write('../../src/slingo_const.inc', nlambda_slingo=len(lambda_min), lambda_min_slingo=lambda_min, lambda_max_slingo=lambda_max, lambda_slingo=(lambda_min + lambda_max)*0.5, a_slingo=a, b_slingo=b, c_slingo=c, d_slingo=d, e_slingo=e, f_slingo=f)
 
-lam, ET, a_r, a_o, a_v, a_o2, a_co2 = parse('atmo25b.dat', 4, range(7))
-write('../../src/oasim_const.inc', nlambda_oasim=len(lam), lambda_oasim=lam, ET_oasim=ET, a_r_oasim=a_r, a_o_oasim=a_o, a_v_oasim=a_v, a_u_oasim=a_o2 + a_co2)
+lam, ET, tau_r, a_o, a_v, a_o2, a_co2 = parse('atmo25b.dat', 4, range(7))
+write('../../src/oasim_const.inc', nlambda_oasim=len(lam), lambda_oasim=lam, ET_oasim=ET, tau_r_oasim=tau_r, a_o_oasim=a_o, a_v_oasim=a_v, a_u_oasim=a_o2 + a_co2)
