@@ -2,24 +2,28 @@ instances:
   light:
     model: spectral/spectral
     parameters:
-      nlambda: 50
-      lambda_min: 400
-      lambda_max: 700
-  lwp:
-    model: horizontal_constant
-    parameters:
-      standard_name: atmosphere_mass_content_of_cloud_liquid_water
-      value: 0.1
-  hum:
-    model: horizontal_constant
-    parameters:
-      standard_name: relative_humidity
-      value: 1
-  vap:
-    model: horizontal_constant
-    parameters:
-      standard_name: atmosphere_mass_content_of_water_vapor
-      value: 20.
+      lambda_method: 1
+      save_spectra: true
+      #nlambda: 50
+      #lambda_min: 400
+      #lambda_max: 700
+  relhum:
+    model: spectral/relhum
+  #lwp:
+  #  model: horizontal_constant
+  #  parameters:
+  #    standard_name: atmosphere_mass_content_of_cloud_liquid_water
+  #    value: 0.1
+  #hum:
+  #  model: horizontal_constant
+  #  parameters:
+  #    standard_name: relative_humidity
+  #    value: 1
+  #vap:
+  #  model: horizontal_constant
+  #  parameters:
+  #    standard_name: atmosphere_mass_content_of_water_vapor
+  #    value: 20.
   viz:
     model: horizontal_constant
     parameters:
@@ -29,4 +33,4 @@ instances:
     model: horizontal_constant
     parameters:
       standard_name: aerosol_air_mass_type
-      value: 1
+      value: 10
