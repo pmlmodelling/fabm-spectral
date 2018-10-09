@@ -160,8 +160,8 @@ contains
       call interp(nlambda_oasim, lambda_birdrior1986, a_u_birdrior1986, self%nlambda, self%lambda, self%a_u)
 
       ! Rayleigh optical thickness (Eq 2 Bird 1984, Eq 4 Bird & Riordan 1986, Eq 15 Gregg & Carder 1990)
-      !self%tau_r = 1.0_rk / (115.6406_rk * self%lambda**4 - 1.335_rk * self%lambda**2)
-      call interp(nlambda_oasim, lambda_oasim, tau_r_oasim, self%nlambda, self%lambda, self%tau_r)
+      !call interp(nlambda_oasim, lambda_oasim, tau_r_oasim, self%nlambda, self%lambda, self%tau_r)
+      self%tau_r = 1.0_rk / (115.6406_rk * (self%lambda/1000)**4 - 1.335_rk * (self%lambda/1000)**2)
 
       ! Protect against negative absorption coefficients produced by linear extrapolation
       self%a_o = max(0._rk, self%a_o)
