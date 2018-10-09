@@ -560,13 +560,14 @@ contains
       ! function relating particle size to relative humidity (Eq 24 Gregg & Carder 1990)
       f = ((2._rk - relhum) / (6 * (1._rk - relhum)))**(1._rk / 3._rk)
 
-      ! Assume Junge distribution (i.e., particle density is power law of radius): dN/dr = c r^gamma
-      ! Estimate gamma with least squares.
+      ! Particle density at different radii (Gregg & Carder 1990 p 1665)
       do i = 1, gridsize
           dNdr(i) = sum(A * exp(-log(r_grid(i) / f / r_o)**2) / f)
       end do
 
-      ! Slope is x-y covariance / variance of x
+      ! Assume Junge distribution (i.e., particle density is power law of radius): dN/dr = C r^gamma
+      ! Estimate gamma with least squares.
+      ! Note: least-squares estimate of slope is x-y covariance / variance of x
       x = log(r_grid)
       y = log(dNdr)
       xsum = sum(x)
@@ -576,7 +577,7 @@ contains
       ! Calculate Angstrom exponent from exponent of Junge distribution (Eq 26 Gregg & Carder 1990).
       ! Junge distribution: dN/d(ln r) = r dN/dr = C r^(-v)
       ! Thus, dN/dr = C r^(-v-1)
-      ! The relation to gamma defined above is gamma = -v-1. Thus, v = -gamma-1
+      ! The relation to gamma defined above: gamma = -v - 1. Thus, v = -gamma - 1
       ! The relationship between Junge distribution and Angstrom exponent is alpha = v - 2 (e.g. Tomasi et al. 1983)
       ! Thus, alpha = -gamma - 3
       alpha = -(gamma + 3)
