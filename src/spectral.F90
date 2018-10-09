@@ -545,7 +545,7 @@ contains
       real(rk), parameter :: r_grid(gridsize) = (/0.1_rk, 1._rk, 10._rk/)
 
       real(rk) :: relhum, A(nsize), f, gamma, tau_a550
-      real(rk) :: dNdr(gridsize), y(gridsize), x(gridsize), xsum, ysum
+      real(rk) :: dNdr(gridsize), y(gridsize), x(gridsize)
       integer :: i
       real(rk) :: c_a550
       real(rk) :: B1, B2, B3, cos_theta_bar
@@ -554,6 +554,7 @@ contains
       relhum = min(0.999_rk, RH)
 
       ! Amplitude functions for aerosol components (Eqs 21-23 Gregg & Carder 1990)
+      ! Units are number of particles per cubic centimeter per micrometer (Gathman 1983)
       A(1) = 2000 * AM * AM
       A(2) = max(0.5_rk, 5.866_rk * (WM - 2.2_rk))
       A(3) = max(1.4e-5_rk, 0.01527_rk * (W - 2.2_rk) * R)
@@ -569,11 +570,11 @@ contains
       ! Assume Junge distribution (i.e., particle density is power law of radius): dN/dr = C r^gamma
       ! Estimate gamma with least squares.
       ! Note: least-squares estimate of slope is x-y covariance / variance of x
-      x = log(r_grid)
-      y = log(dNdr)
-      xsum = sum(x)
-      ysum = sum(y)
-      gamma = (sum(x * y) - xsum * ysum / gridsize) / (sum(x**2) - xsum * xsum / gridsize)
+      ! Due to the choice of r_grid (0.1, 1, 10), the sum of log10 x is 0.
+      ! As a result, we do not need to subtract x_mean*y_mean and x_mean^2 to compute (co)variances.
+      x = log10(r_grid)
+      y = log10(dNdr)
+      gamma = sum(x * y) / sum(x**2)
 
       ! Calculate Angstrom exponent from exponent of Junge distribution (Eq 26 Gregg & Carder 1990).
       ! Junge distribution: dN/d(ln r) = r dN/dr = C r^(-v)
