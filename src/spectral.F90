@@ -43,6 +43,7 @@ module fabm_spectral
 #include "water_const.inc"
 #include "oasim_const.inc"
 #include "astm_const.inc"
+#include "birdrior1986_const.inc"
 
    interface interp
       module procedure interp_0d
@@ -156,7 +157,7 @@ contains
       end if
       call interp(nlambda_oasim, lambda_oasim, a_o_oasim, self%nlambda, self%lambda, self%a_o)
       call interp(nlambda_oasim, lambda_oasim, a_v_oasim, self%nlambda, self%lambda, self%a_v)
-      call interp(nlambda_oasim, lambda_oasim, a_u_oasim, self%nlambda, self%lambda, self%a_u)
+      call interp(nlambda_oasim, lambda_birdrior1986, a_u_birdrior1986, self%nlambda, self%lambda, self%a_u)
 
       ! Rayleigh optical thickness (Eq 2 Bird 1984, Eq 4 Bird & Riordan 1986, Eq 15 Gregg & Carder 1990)
       !self%tau_r = 1.0_rk / (115.6406_rk * self%lambda**4 - 1.335_rk * self%lambda**2)

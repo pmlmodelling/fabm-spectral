@@ -31,3 +31,29 @@ write('../../src/slingo_const.inc', nlambda_slingo=len(lambda_min), lambda_min_s
 
 lam, ET, tau_r, a_o, a_v, a_o2, a_co2 = parse('atmo25b.dat', 4, range(7))
 write('../../src/oasim_const.inc', nlambda_oasim=len(lam), lambda_oasim=lam, ET_oasim=ET, tau_r_oasim=tau_r, a_o_oasim=a_o, a_v_oasim=a_v, a_u_oasim=a_o2 + a_co2)
+
+
+lams_br, a_us_br = [], []
+with open('../birdrior1986/table1.txt', 'rU') as f:
+    labels = f.readline().rstrip('\n').split('\t')
+    for l in f:
+        items = l.rstrip('\n').split('\t')
+        lams_br.append(float(items[0])*1000)
+        a_us_br.append(float(items[4]))
+
+from matplotlib import pyplot
+fig = pyplot.figure(figsize=(12,5))
+ax = fig.add_subplot(121)
+BR_tau_r = 1. / (115.6406 * (lam/1000)**4 - 1.335 * (lam/1000)**2)
+ax.plot(lam, tau_r, '-', label='OASIM')
+ax.plot(lam, BR_tau_r, '-', label='Bird & Riordan 1986')
+ax.legend()
+ax.grid(True)
+
+ax = fig.add_subplot(122)
+ax.plot(lam, a_o2 + a_co2, '-', label='OASIM')
+ax.plot(lams_br, a_us_br, '-', label='Bird & Riordan 1986')
+ax.legend()
+ax.grid(True)
+
+fig.savefig('comparison.png', dpi=300)
