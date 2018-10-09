@@ -550,6 +550,7 @@ contains
       real(rk) :: c_a550
       real(rk) :: B1, B2, B3, cos_theta_bar
 
+      ! Impose upper limit on relative humidity (RH = 1 causes division by 0 in expression for f below)
       relhum = min(0.999_rk, RH)
 
       ! Amplitude functions for aerosol components (Eqs 21-23 Gregg & Carder 1990)
