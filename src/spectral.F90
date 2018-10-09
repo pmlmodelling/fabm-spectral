@@ -121,8 +121,8 @@ contains
       call self%register_dependency(self%id_lwp, type_horizontal_standard_variable('atmosphere_mass_content_of_cloud_liquid_water', 'kg m-2'))
       call self%register_dependency(self%id_O3, type_horizontal_standard_variable('atmosphere_mass_content_of_ozone', 'kg m-2'))
       call self%register_dependency(self%id_WV, type_horizontal_standard_variable('atmosphere_mass_content_of_water_vapor', 'kg m-2'))
-      call self%register_dependency(self%id_visibility, type_horizontal_standard_variable('visibility_in_air'))
-      call self%register_dependency(self%id_air_mass_type, type_horizontal_standard_variable('aerosol_air_mass_type'))
+      call self%register_dependency(self%id_visibility, type_horizontal_standard_variable('visibility_in_air', 'm'))
+      call self%register_dependency(self%id_air_mass_type, type_horizontal_standard_variable('aerosol_air_mass_type', '-'))
       call self%register_dependency(self%id_mean_wind_speed, temporal_mean(self%id_wind_speed, period=86400._rk, resolution=3600._rk))
 
       !call self%register_diagnostic_variable(self%id_swr, 'swr',     'W/m^2',     'shortwave radiation')
@@ -539,13 +539,13 @@ contains
       real(rk), intent(out) :: alpha, beta, F_a, omega_a
 
       real(rk), parameter :: R = 0.05_rk
-      integer, parameter :: nr = 3, nr_eval = 3
-      real(rk), parameter :: r_o(nr) = (/0.03_rk, 0.24_rk, 2.0_rk/)
+      integer, parameter :: nsize = 3, gridsize = 3
+      real(rk), parameter :: r_o(nsize) = (/0.03_rk, 0.24_rk, 2.0_rk/)
       real(rk), parameter :: H_a = 1000._rk ! Aerosol scale height (m) Gregg & Carder 1990 p1665
-      real(rk), parameter :: r_eval(nr_eval) = (/0.1_rk, 1._rk, 10._rk/)
+      real(rk), parameter :: r_grid(gridsize) = (/0.1_rk, 1._rk, 10._rk/)
 
-      real(rk) :: relhum, A(nr), f, gamma, tau_a550
-      real(rk) :: y(nr_eval), x(nr_eval), xsum, ysum
+      real(rk) :: relhum, A(nsize), f, gamma, tau_a550
+      real(rk) :: dNdr(gridsize), y(gridsize), x(gridsize), xsum, ysum
       integer :: i
       real(rk) :: c_a550
       real(rk) :: B1, B2, B3, cos_theta_bar
@@ -561,15 +561,16 @@ contains
       f = ((2._rk - relhum) / (6 * (1._rk - relhum)))**(1._rk / 3._rk)
 
       ! Estimate gamma with least squares
-      do i = 1, nr_eval
-          y(i) = log(sum(A*exp(-log(r_eval(i)/f/r_o)**2)/f))
+      do i = 1, gridsize
+          dNdr(i) = sum(A * exp(-log(r_grid(i) / f / r_o)**2) / f)
       end do
-      x = log(r_eval)
-      xsum = sum(x)
-      ysum = sum(y)
 
       ! Slope is x-y covariance / variance of x
-      gamma = (sum(x * y) - xsum * ysum / nr_eval) / (sum(x**2) - xsum * xsum / nr_eval)
+      x = log(r_grid)
+      y = log(dNdr)
+      xsum = sum(x)
+      ysum = sum(y)
+      gamma = (sum(x * y) - xsum * ysum / gridsize) / (sum(x**2) - xsum * xsum / gridsize)
 
       ! Angstrom exponent (Eq 26 Gregg & Carder 1990)
       alpha = -(gamma + 3)
