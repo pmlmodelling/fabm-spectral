@@ -631,9 +631,9 @@ contains
       if (W <= 0._rk) then
          C_D = 0._rk
       else if (W <= 7._rk) then
-         C_D = (0.62_rk + 1.56_rk / W) * 1.e-3_rk
+         C_D = 0.62e-3_rk + 1.56e-3_rk / W
       else
-         C_D = (0.49_rk + 0.065_rk * W) * 1.e-3_rk
+         C_D = 0.49e-3_rk + 0.065e-3_rk * W
       end if
 
       ! Wavelength-independent foam reflectance [affects direct and diffuse light] (Eqs 39-41 Gregg and Carder 1990)
@@ -661,7 +661,7 @@ contains
       else
          ! Fresnel's Law, Eq 44 Gregg and Carder 1990 - note: contains typo (internal 1/2), see Kirk 3rd ed 2011, p 46
          rho_dsp = 0.5_rk * (sin(theta - theta_r)**2 / sin(theta + theta_r)**2 + tan(theta - theta_r)**2 / tan(theta + theta_r)**2)
-      end if 
+      end if
 
       ! Diffuse light specular component (p 1667 Gregg and Carder 1990)
       if (W > 4._rk) then
