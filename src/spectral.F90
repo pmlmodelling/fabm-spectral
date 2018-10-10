@@ -286,7 +286,7 @@ contains
          T_r = exp(-M_prime * self%tau_r)
 
          ! Transmittance due to aerosol absorption (Eq 26 Gregg & Carder 1990)
-         call navy_aerol_model(AM, WM, wind_speed, relhum, visibility, costheta, alpha_a, beta_a, F_a, omega_a)
+         call navy_aerosol_model(AM, WM, wind_speed, relhum, visibility, costheta, alpha_a, beta_a, F_a, omega_a)
          tau_a = beta_a * self%lambda**(-alpha_a)
          T_a = exp(-tau_a * M)
 
@@ -525,7 +525,7 @@ contains
       targety(:) = y(:,i) + frac*(y(:,i+1)-y(:,i))
    end subroutine
 
-   subroutine navy_aerol_model(AM, WM, W, RH, V, costheta, alpha, beta, F_a, omega_a)
+   subroutine navy_aerosol_model(AM, WM, W, RH, V, costheta, alpha, beta, F_a, omega_a)
       ! AM: air-mass type (1 = marine aerosol-dominated, 10 continental aerosol-dominated)
       ! WM: wind speed averaged over past 24 h (m s-1)
       ! W: instantaneous wind speed (m s-1)
