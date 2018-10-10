@@ -622,10 +622,12 @@ contains
       ! Refractive index of seawater, Gregg and Carder 1990 p1667
       real(rk), parameter :: n_w = 1.341_rk
 
-      real(rk) :: C_D, rho_f_W, rho_f(nlambda)
+      real(rk) :: C_D, tau, rho_f_W, rho_f(nlambda)
       real(rk) :: theta_r, b, rho_dsp, rho_ssp
 
       ! Drag coefficient (Eqs 42, 43 Gregg and Carder 1990)
+      ! Constants match Trenberth et al. 1989 p1508 J Clim. However, they use different wind speed thresholds
+      ! and a constant value between 3 and 10 m s-1. Theirs is also continuous, whereas the expression below is discontinuous.
       if (W <= 0._rk) then
          C_D = 0._rk
       else if (W <= 7._rk) then
@@ -635,12 +637,14 @@ contains
       end if
 
       ! Wavelength-independent foam reflectance [affects direct and diffuse light] (Eqs 39-41 Gregg and Carder 1990)
+      ! Reformulated to make dependence on surface stress (tau, units seem to be 10-3 m2/s2) explicit.
+      tau = rho_a * C_D * W**2
       if (W <= 4._rk) then
          rho_f_W = 0._rk
       elseif (W <= 7._rk) then
-         rho_f_W = D1 * rho_a * C_D * W**2 - D2
+         rho_f_W = D1 * tau - D2
       else
-         rho_f_W = (D3 * rho_a * C_D - D4) * W**2
+         rho_f_W = D3 * tau - D4 * W**2
       end if
 
       ! Final wavelength and wind speed-dependent foam reflectance
