@@ -602,6 +602,9 @@ contains
       F_a = 1._rk - 0.5_rk * exp((B1 + B2 * costheta) * costheta)
 
       ! Single scattering albedo (Eq 36 Gregg & Carder 1990)
+      ! For comparison:
+      ! - Bird & Riordan 1986 (p 91) use omega_a = 0.945 at 400 nm for rural aerosols (AM = 10)
+      ! - Shettle and Fenn 1979 (tables 28-35) report 0.982 at RH=0% to 0.9986 at RH=99% at 550 nm for their maritime aerosol model (AM=1)
       omega_a = (-0.0032_rk * AM + 0.972_rk) * exp(3.06e-2_rk * relhum)
    end subroutine
 
