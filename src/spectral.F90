@@ -157,7 +157,8 @@ contains
       end if
       call interp(nlambda_oasim, lambda_oasim, a_o_oasim, self%nlambda, self%lambda, self%a_o)
       call interp(nlambda_oasim, lambda_oasim, a_v_oasim, self%nlambda, self%lambda, self%a_v)
-      call interp(nlambda_oasim, lambda_birdrior1986, a_u_birdrior1986, self%nlambda, self%lambda, self%a_u)
+      call interp(nlambda_oasim, lambda_oasim, a_u_oasim, self%nlambda, self%lambda, self%a_u)
+      !call interp(nlambda_oasim, lambda_birdrior1986, a_u_birdrior1986, self%nlambda, self%lambda, self%a_u)
 
       ! Rayleigh optical thickness (Eq 2 Bird 1984, Eq 4 Bird & Riordan 1986, Eq 15 Gregg & Carder 1990)
       !call interp(nlambda_oasim, lambda_oasim, tau_r_oasim, self%nlambda, self%lambda, self%tau_r)
@@ -570,7 +571,7 @@ contains
       ! Assume Junge distribution (i.e., particle density is power law of radius): dN/dr = C r^gamma
       ! Estimate gamma with least squares.
       ! Note: least-squares estimate of slope is x-y covariance / variance of x
-      ! Due to the choice of r_grid (0.1, 1, 10), the sum of log10 x is 0.
+      ! Due to the choice of r_grid (0.1, 1, 10), the sum of x_i = log10 r_i is 0.
       ! As a result, we do not need to subtract x_mean*y_mean and x_mean^2 to compute (co)variances.
       x = log10(r_grid)
       y = log10(dNdr)
@@ -610,11 +611,13 @@ contains
       real(rk), intent(out) :: rho_d(nlambda), rho_s(nlambda)
 
       ! Coefficients for foam reflectance-wind speed relationship (p1666 Gregg and Carder 1990)
-      real(rk), parameter :: rho_a = 1.2e3_rk   ! Air density (g/m3)
       real(rk), parameter :: D1 = 2.2e-5_rk
       real(rk), parameter :: D2 = 4.0e-4_rk
       real(rk), parameter :: D3 = 4.5e-5_rk
       real(rk), parameter :: D4 = 4.0e-5_rk
+
+      ! Air density (g/m3)
+      real(rk), parameter :: rho_a = 1.2e3_rk
 
       ! Refractive index of seawater, Gregg and Carder 1990 p1667
       real(rk), parameter :: n_w = 1.341_rk
