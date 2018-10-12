@@ -13,7 +13,8 @@ def parse(path, nskip, columns):
 
 def write(path, **kwargs):
    with open(path, 'w') as f:
-       for name, data in kwargs.items():
+       for name in sorted(kwargs.keys(), key=str.lower):
+           data = kwargs[name]
            if isinstance(data, int):
               f.write('integer, parameter :: %s = %i\n' % (name, data))
            else:
