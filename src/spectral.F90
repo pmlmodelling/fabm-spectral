@@ -8,6 +8,7 @@ module fabm_spectral
    use fabm_types
    use fabm_standard_variables
    use fabm_expressions, only: temporal_mean
+   use fabm_particle
 
    implicit none
 
@@ -15,7 +16,14 @@ module fabm_spectral
 
    public :: slingo, nlambda_slingo, lambda_slingo
 
-   type,extends(type_base_model), public :: type_spectral
+   type type_iop
+      type (type_dependency_id) :: id_c         ! concentration (could be chl, carbon, or something else, but its product with a or b below should return units m-1)
+      real(rk), dimension(:), allocatable :: a  ! specific absorption (m-1 concentration-1)
+      real(rk), dimension(:), allocatable :: b  ! specific total scattering (m-1 concentration-1)
+      real(rk) :: b_b                           ! ratio of backscattering to total scattering (dimensionless)
+   end type
+
+   type,extends(type_particle_model), public :: type_spectral
       type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf_w, id_par_sf_w, id_uv_sf_w, id_par_E_sf_w
@@ -30,9 +38,10 @@ module fabm_spectral
       real(rk), dimension(:), allocatable :: exter
       real(rk), dimension(:), allocatable :: a_o, a_u, a_v, tau_r
       real(rk), dimension(:), allocatable :: a_w, b_w
+      type (type_iop), allocatable :: iops(:)
    contains
       procedure :: initialize
-      procedure :: do_surface
+      procedure :: get_light
    end type
 
    real(rk), parameter :: pi = 3.14159265358979323846_rk
@@ -44,6 +53,7 @@ module fabm_spectral
 #include "oasim_const.inc"
 #include "astm_const.inc"
 #include "birdrior1986_const.inc"
+#include "phyto_const.inc"
 
    interface interp
       module procedure interp_0d
@@ -60,12 +70,13 @@ contains
 
       integer :: l
       integer :: lambda_method
+      integer :: n_iop, i_iop, iop_type
       real(rk) :: lambda_min, lambda_max
       logical :: save_spectra
       character(len=8) :: strwavelength, strindex
 
       integer, parameter :: exter_source = 2
-
+      
       ! Coefficients for wavelength dependence of foam reflectance (Eqs A11, A12 in Gregg & Casey 2009)
       real(rk), parameter :: a0 = 0.9976_rk
       real(rk), parameter :: a1 = 0.2194_rk
@@ -100,6 +111,65 @@ contains
       end select
       call self%get_parameter(save_spectra, 'save_spectra', '', 'save full spectral irradiance', default=.false.)
 
+      call self%get_parameter(n_iop, 'n_iop', '', 'number of inherent optical properties (IOPs)', default=0)
+      allocate(self%iops(n_iop))
+      do i_iop = 1, n_iop
+         allocate(self%iops(i_iop)%a(self%nlambda))
+         allocate(self%iops(i_iop)%b(self%nlambda))
+         write(strindex, '(i0)') i_iop
+         call self%get_parameter(iop_type, 'iop'//trim(strindex)//'_type', '', 'type of IOP '//trim(strindex), default=0)
+         select case (iop_type)
+         case (1) ! diatoms
+            call interp(size(lambda_diatoms), lambda_diatoms, a_diatoms, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_diatoms), lambda_diatoms, b_diatoms, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            self%iops(i_iop)%b_b = 0.002 ! Gregg & Rousseau 2016 but originally Morel 1988
+         case (2) ! chlorophytes
+            call interp(size(lambda_chlorophytes), lambda_chlorophytes, a_chlorophytes, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_chlorophytes), lambda_chlorophytes, b_chlorophytes, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            self%iops(i_iop)%b_b = 0.00071 * 10 ! Note: 10x Ahn et al. 1992 as reported in Gregg & Rousseau 2016
+         case (3) ! cyanobacteria
+            call interp(size(lambda_cyanobacteria), lambda_cyanobacteria, a_cyanobacteria, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_cyanobacteria), lambda_cyanobacteria, b_cyanobacteria, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            self%iops(i_iop)%b_b = 0.0032 ! Gregg & Rousseau 2016 but originally Ahn et al. 1992
+         case (4) ! coccolithophorids
+            call interp(size(lambda_coccolithophores), lambda_coccolithophores, a_coccolithophores, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_coccolithophores), lambda_coccolithophores, b_coccolithophores, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            self%iops(i_iop)%b_b = 0.00071 * 10 ! Note: 10x Morel 1988 as reported in Gregg & Rousseau 2016
+         case (5) ! dinoflagellates
+            call interp(size(lambda_dinoflagellates), lambda_dinoflagellates, a_dinoflagellates, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_dinoflagellates), lambda_dinoflagellates, b_dinoflagellates, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            self%iops(i_iop)%b_b = 0.0029 ! Gregg & Rousseau 2016 but originally Morel 1988
+         case (6) ! detritus (small, as described in Gregg & Rousseau 2016.
+            ! NB 12.0107 converts from mg-1 to mmol-1
+            self%iops(i_iop)%a(:) = 8e-5_rk * exp(-0.013_rk * (self%lambda - 440_rk)) * 12.0107_rk
+            self%iops(i_iop)%b(:) = 0.00115_rk * sqrt(550._rk / self%lambda) * 12.0107_rk
+            self%iops(i_iop)%b_b = 0.005_rk
+         !case (7) ! PIC
+         !   self%iops(i_iop)%a(:) = 0
+         !   call interp(size(), lambda_w, a_w, self%nlambda, self%lambda, self%iops(i_iop)%b)
+         !   self%iops(i_iop)%b_b = 0.01_rk
+         case (8) ! CDOC
+            ! NB 12.0107 converts from mg-1 to mmol-1
+            self%iops(i_iop)%a(:) = 2.98e-4_rk * exp(-0.014_rk * (self%lambda - 443_rk)) * 12.0107_rk
+            self%iops(i_iop)%b(:) = 0
+            self%iops(i_iop)%b_b = 0
+         end select
+
+         ! Protect against negative coefficients caused by extrapolation beyond source spectrum boundaries.
+         self%iops(i_iop)%a(:) = max(self%iops(i_iop)%a, 0._rk)
+         self%iops(i_iop)%b(:) = max(self%iops(i_iop)%b, 0._rk)
+
+         ! Link to concentration metric (mmol carbon/m3 for organic carbon; mg chl/m3 for phytoplankton)
+         select case (iop_type)
+         case (6,7,8)
+            call self%register_dependency(self%iops(i_iop)%id_c, 'iop' // trim(strindex) // '_c', 'mmol C m-3', 'carbon in IOP ' // trim(strindex))
+            call self%request_coupling_to_model(self%iops(i_iop)%id_c, 'iop' // trim(strindex), standard_variables%total_carbon)
+         case default
+            call self%register_dependency(self%iops(i_iop)%id_c, 'iop' // trim(strindex) // '_chl', 'mg Chl m-3', 'chlorophyll in IOP ' // trim(strindex))
+            call self%request_coupling_to_model(self%iops(i_iop)%id_c, 'iop' // trim(strindex), type_bulk_standard_variable(name='total_chlorophyll'))
+         end select
+      end do
+
       ! Find wavelength bounds of photosynthetically active radiation
       allocate(self%par_weights(self%nlambda))
       allocate(self%swr_weights(self%nlambda))
@@ -125,24 +195,24 @@ contains
       call self%register_dependency(self%id_air_mass_type, type_horizontal_standard_variable('aerosol_air_mass_type', '-'))
       call self%register_dependency(self%id_mean_wind_speed, temporal_mean(self%id_wind_speed, period=86400._rk, resolution=3600._rk))
 
-      !call self%register_diagnostic_variable(self%id_swr, 'swr',     'W/m^2',     'downwelling shortwave flux')
-      !call self%register_diagnostic_variable(self%id_uv,  'uv',      'W/m^2',     'downwelling ultraviolet radiative flux')
-      !call self%register_diagnostic_variable(self%id_par, 'par',     'W/m^2',     'downwelling photosynthetic radiative flux')
-      !call self%register_diagnostic_variable(self%id_par_E, 'par_E', 'umol/m^2/s','downwelling photosynthetic photon flux')
-      call self%register_diagnostic_variable(self%id_swr_sf,     'swr_sf',     'W/m^2',     'downwelling shortwave flux in air')
-      call self%register_diagnostic_variable(self%id_swr_dif_sf, 'swr_dif_sf', 'W/m^2',     'diffuse downwelling shortwave flux in air')
-      call self%register_diagnostic_variable(self%id_uv_sf,      'uv_sf',      'W/m^2',     'downwelling ultraviolet radiative flux in air')
-      call self%register_diagnostic_variable(self%id_par_sf,     'par_sf',     'W/m^2',     'downwelling photosynthetic radiative flux in air')
-      call self%register_diagnostic_variable(self%id_par_E_sf,   'par_E_sf',   'umol/m^2/s','downwelling photosynthetic photon flux in air')
-      call self%register_diagnostic_variable(self%id_swr_sf_w,   'swr_sf_w',   'W/m^2',     'downwelling shortwave flux in water')
-      call self%register_diagnostic_variable(self%id_uv_sf_w,    'uv_sf_w',    'W/m^2',     'downwelling ultraviolet radiative flux in water')
-      call self%register_diagnostic_variable(self%id_par_sf_w,   'par_sf_w',   'W/m^2',     'downwelling photosynthetic radiative flux in water')
-      call self%register_diagnostic_variable(self%id_par_E_sf_w, 'par_E_sf_w', 'umol/m^2/s','downwelling photosynthetic photon flux in water')
+      call self%register_diagnostic_variable(self%id_swr, 'swr',     'W/m^2',     'downwelling shortwave flux', standard_variable=standard_variables%downwelling_shortwave_flux, source=source_do_column)
+      call self%register_diagnostic_variable(self%id_uv,  'uv',      'W/m^2',     'downwelling ultraviolet radiative flux', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par, 'par',     'W/m^2',     'downwelling photosynthetic radiative flux', standard_variable=standard_variables%downwelling_photosynthetic_radiative_flux, source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_E, 'par_E', 'umol/m^2/s','downwelling photosynthetic photon flux', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_swr_sf,     'swr_sf',     'W/m^2',     'downwelling shortwave flux in air', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_swr_dif_sf, 'swr_dif_sf', 'W/m^2',     'diffuse downwelling shortwave flux in air', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_uv_sf,      'uv_sf',      'W/m^2',     'downwelling ultraviolet radiative flux in air', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_sf,     'par_sf',     'W/m^2',     'downwelling photosynthetic radiative flux in air', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_E_sf,   'par_E_sf',   'umol/m^2/s','downwelling photosynthetic photon flux in air', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_swr_sf_w,   'swr_sf_w',   'W/m^2',     'downwelling shortwave flux in water', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_uv_sf_w,    'uv_sf_w',    'W/m^2',     'downwelling ultraviolet radiative flux in water', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_sf_w,   'par_sf_w',   'W/m^2',     'downwelling photosynthetic radiative flux in water', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_E_sf_w, 'par_E_sf_w', 'umol/m^2/s','downwelling photosynthetic photon flux in water', source=source_do_column)
 
-      call self%register_diagnostic_variable(self%id_alpha_a, 'alpha_a', '-', 'aerosol Angstrom exponent')
-      call self%register_diagnostic_variable(self%id_beta_a, 'beta_a', '-', 'aerosol scale factor for optical thickness')
-      call self%register_diagnostic_variable(self%id_omega_a, 'omega_a', '-', 'aerosol single scattering albedo')
-      call self%register_diagnostic_variable(self%id_F_a, 'F_a', '-', 'aerosol forward scattering probability')
+      call self%register_diagnostic_variable(self%id_alpha_a, 'alpha_a', '-', 'aerosol Angstrom exponent', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_beta_a, 'beta_a', '-', 'aerosol scale factor for optical thickness', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_omega_a, 'omega_a', '-', 'aerosol single scattering albedo', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_F_a, 'F_a', '-', 'aerosol forward scattering probability', source=source_do_column)
 
       ! Interpolate absorption and scattering spectra to user wavelength grid
       allocate(self%a_w(self%nlambda), self%b_w(self%nlambda))
@@ -196,24 +266,23 @@ contains
                write(strwavelength, '(f6.1)') self%lambda(l)
             end if
             write(strindex, '(i0)') l
-            call self%register_diagnostic_variable(self%id_surface_band_dir(l), 'dir_sf_band' // trim(strindex), 'W/m2/nm', 'downward direct irradiance in air @ ' // trim(strwavelength) // ' nm')
-            call self%register_diagnostic_variable(self%id_surface_band_dif(l), 'dif_sf_band' // trim(strindex), 'W/m2/nm', 'downward diffuse irradiance in air @ ' // trim(strwavelength) // ' nm')
-            !call self%register_diagnostic_variable(self%id_band_dir(l), 'dir_band' // trim(strindex), 'W/m2/nm', 'direct irradiance @ ' // trim(strwavelength) // ' nm')
-            !call self%register_diagnostic_variable(self%id_band_dif(l), 'dif_band' // trim(strindex), 'W/m2/nm', 'diffuse irradiance @ ' // trim(strwavelength) // ' nm')
+            call self%register_diagnostic_variable(self%id_surface_band_dir(l), 'dir_sf_band' // trim(strindex), 'W/m2/nm', 'downward direct irradiance in air @ ' // trim(strwavelength) // ' nm', source=source_do_column)
+            call self%register_diagnostic_variable(self%id_surface_band_dif(l), 'dif_sf_band' // trim(strindex), 'W/m2/nm', 'downward diffuse irradiance in air @ ' // trim(strwavelength) // ' nm', source=source_do_column)
+            !call self%register_diagnostic_variable(self%id_band_dir(l), 'dir_band' // trim(strindex), 'W/m2/nm', 'direct irradiance @ ' // trim(strwavelength) // ' nm', source=source_do_column)
+            !call self%register_diagnostic_variable(self%id_band_dif(l), 'dif_band' // trim(strindex), 'W/m2/nm', 'diffuse irradiance @ ' // trim(strwavelength) // ' nm', source=source_do_column)
          end do
       end if
    end subroutine initialize
 
-   subroutine do_surface(self, _ARGUMENTS_DO_SURFACE_)
+   subroutine get_light(self, _ARGUMENTS_VERTICAL_)
       class (type_spectral), intent(in) :: self
-      _DECLARE_ARGUMENTS_DO_SURFACE_
+      _DECLARE_ARGUMENTS_VERTICAL_
 
-      !real(rk), parameter :: W0 = 0.928_rk  ! Single scattering albedo of the aerosol (Bird 1984 Eq 15)
-      !real(rk), parameter :: fa = 0.82_rk   ! Forward to total scattering ratio of the aerosol (Bird 1984 Eq 15)
-      real(rk), parameter :: pres0 = 101300._rk ! reference air pressure in Pa (Bird 1984 p461, Bird & Riordan p89)
-      !real(rk), parameter :: ga = 0.05_rk ! ground albedo
-      real(rk), parameter :: H_oz = 22._rk ! Height of maximum ozone concentration (km)
-      real(rk), parameter :: r_e = (10._rk + 11.8_rk) / 2 ! equivalent radius of cloud drop size distribution (um) based on mean of Kiehl et al. & Han et al. (cf OASIM)
+      real(rk), parameter :: pres0 = 101300._rk           ! Reference air pressure in Pa (Bird 1984 p461, Bird & Riordan p89)
+      !real(rk), parameter :: ga = 0.05_rk                ! Ground albedo (used by Bird & Riordan 1986, but discarded by Gregg & Carder 1990)
+      real(rk), parameter :: H_oz = 22._rk                ! Height of maximum ozone concentration (km)
+      real(rk), parameter :: r_e = (10._rk + 11.8_rk) / 2 ! Equivalent radius of cloud drop size distribution (um) based on mean of Kiehl et al. & Han et al. (cf OASIM)
+      real(rk), parameter :: mcosthetas = 0.831_rk        ! Mean of cosine of angle of diffuse radiation in water, assuming all angular contributions equal in air (Sathyendranath and Platt 1989, p 191)
 
       real(rk) :: longitude, latitude, yearday, cloud_cover, wind_speed, airpres, relhum, LWP, water_vapour, WV, WM, visibility, AM
       real(rk) :: days, hour, theta, costheta, alpha_a, beta_a
@@ -226,135 +295,173 @@ contains
       real(rk), dimension(self%nlambda) :: T_g, T_dclr, T_sclr, T_dcld, T_scld
       real(rk), dimension(self%nlambda) :: rho_d, rho_s
 
-      _HORIZONTAL_LOOP_BEGIN_
-          _GET_HORIZONTAL_(self%id_lon, longitude)
-          _GET_HORIZONTAL_(self%id_lat, latitude)
-          _GET_GLOBAL_(self%id_yearday, yearday)
-          _GET_HORIZONTAL_(self%id_cloud, cloud_cover)      ! Cloud cover (fraction, 0-1)
-          _GET_HORIZONTAL_(self%id_wind_speed, wind_speed)  ! Wind speed @ 10 m above surface (m/s)
-          _GET_HORIZONTAL_(self%id_airpres, airpres)        ! Surface air pressure (Pa)
-          _GET_HORIZONTAL_(self%id_relhum, relhum)          ! Relative humidity (-)
-          _GET_HORIZONTAL_(self%id_lwp, LWP)                ! Cloud liquid water content (kg m-2)
-          _GET_HORIZONTAL_(self%id_O3, O3)                  ! Ozone content (kg m-2)
-          _GET_HORIZONTAL_(self%id_wv, water_vapour)        ! Total precipitable water vapour (kg m-2) - equivalent to mm
-          _GET_HORIZONTAL_(self%id_mean_wind_speed, WM)     ! Daily mean wind speed @ 10 m above surface (m/s)
-          _GET_HORIZONTAL_(self%id_visibility, visibility)  ! Visibility (m)
-          _GET_HORIZONTAL_(self%id_air_mass_type, AM)       ! Aerosol air mass type (1: open ocean, 10: continental)
+      real(rk), dimension(self%nlambda) :: a, b, b_b
+      real(rk), dimension(self%nlambda) :: f_att_d, f_att_s, f_prod_s
+      integer :: i_iop
+      real(rk) :: c_iop, h
 
-          WV = water_vapour / 10                ! from kg m-2 to cm
-          O3 = O3 * (1000 / 48._rk) / 0.4462_rk ! from kg m-2 to mol m-2, then from mol m-2 to atm cm (Basher 1982)
-          days = floor(yearday) + 1.0_rk
-          hour = mod(yearday, 1.0_rk) * 24.0_rk
+      _GET_HORIZONTAL_(self%id_lon, longitude)
+      _GET_HORIZONTAL_(self%id_lat, latitude)
+      _GET_GLOBAL_(self%id_yearday, yearday)
+      _GET_HORIZONTAL_(self%id_cloud, cloud_cover)      ! Cloud cover (fraction, 0-1)
+      _GET_HORIZONTAL_(self%id_wind_speed, wind_speed)  ! Wind speed @ 10 m above surface (m/s)
+      _GET_HORIZONTAL_(self%id_airpres, airpres)        ! Surface air pressure (Pa)
+      _GET_HORIZONTAL_(self%id_relhum, relhum)          ! Relative humidity (-)
+      _GET_HORIZONTAL_(self%id_lwp, LWP)                ! Cloud liquid water content (kg m-2)
+      _GET_HORIZONTAL_(self%id_O3, O3)                  ! Ozone content (kg m-2)
+      _GET_HORIZONTAL_(self%id_wv, water_vapour)        ! Total precipitable water vapour (kg m-2) - equivalent to mm
+      _GET_HORIZONTAL_(self%id_mean_wind_speed, WM)     ! Daily mean wind speed @ 10 m above surface (m/s)
+      _GET_HORIZONTAL_(self%id_visibility, visibility)  ! Visibility (m)
+      _GET_HORIZONTAL_(self%id_air_mass_type, AM)       ! Aerosol air mass type (1: open ocean, 10: continental)
 
-          ! Calculate zenith angle (in radians)
-          theta = zenith_angle(days, hour, longitude, latitude)
-          theta = min(theta, 0.5_rk * pi)  ! Restrict the input zenith angle between 0 and pi/2
-          costheta = cos(theta)
+      WV = water_vapour / 10                ! from kg m-2 to cm
+      O3 = O3 * (1000 / 48._rk) / 0.4462_rk ! from kg m-2 to mol m-2, then from mol m-2 to atm cm (Basher 1982)
+      days = floor(yearday) + 1.0_rk
+      hour = mod(yearday, 1.0_rk) * 24.0_rk
 
-          ! Atmospheric path length, a.k.a. relative air mass (Eq 3 Bird 1984, Eq 5 Bird & Riordan 1986, Eq 13 Gregg & Carder 1990, Eq A5 in Casey & Gregg 2009)
-          ! Note this should always exceed 1, but as it is an approximation it does not near theta -> 0 (Tomasi et al. 1998 p14). Hence the max operator.
-          M = max(1._rk, 1._rk / (costheta + 0.15_rk * (93.885_rk - theta * rad2deg)**(-1.253_rk)))
+      ! Calculate zenith angle (in radians)
+      theta = zenith_angle(days, hour, longitude, latitude)
+      theta = min(theta, 0.5_rk * pi)  ! Restrict the input zenith angle between 0 and pi/2
+      costheta = cos(theta)
 
-          ! Pressure-corrected atmospheric path length (Eq A6 Casey & Gregg 2009)
-          M_prime = M * airpres / pres0
+      ! Atmospheric path length, a.k.a. relative air mass (Eq 3 Bird 1984, Eq 5 Bird & Riordan 1986, Eq 13 Gregg & Carder 1990, Eq A5 in Casey & Gregg 2009)
+      ! Note this should always exceed 1, but as it is an approximation it does not near theta -> 0 (Tomasi et al. 1998 p14). Hence the max operator.
+      M = max(1._rk, 1._rk / (costheta + 0.15_rk * (93.885_rk - theta * rad2deg)**(-1.253_rk)))
 
-         ! Atmospheric path length for ozone
-         ! Eq 10, Bird & Riordan 1986, Eq 14 Gregg & Carder 1990; NB 6370 is the earth's radius in km
-         ! See also Tomasi et al. 1998 Eq 5
-         M_oz = (1._rk + H_oz / 6370._rk) / sqrt(costheta**2 + 2 * H_oz / 6370._rk)
+      ! Pressure-corrected atmospheric path length (Eq A6 Casey & Gregg 2009)
+      M_prime = M * airpres / pres0
 
-         ! Transmittance due to ozone absorption (Eq 8 Bird 1984, Eq 9 Bird & Riordan 1986, Eq 17 Gregg & Carder 1990)
-         T_oz = exp(-self%a_o * O3 * M_oz)
+      ! Atmospheric path length for ozone
+      ! Eq 10, Bird & Riordan 1986, Eq 14 Gregg & Carder 1990; NB 6370 is the earth's radius in km
+      ! See also Tomasi et al. 1998 Eq 5
+      M_oz = (1._rk + H_oz / 6370._rk) / sqrt(costheta**2 + 2 * H_oz / 6370._rk)
 
-         ! Transmittance due to water vapour absorption - should NOT use pressure-corrected airmass (see Bird and Riordan 1986)
-         ! Eq 8, Bird and Riordan 1986 (Eq 7 Bird 1984 is wrong, as mentioning in B&R, p 89), Eq 19 Gregg & Carder 1990
-         T_w = exp((-0.2385_rk * self%a_v * WV * M) / (1._rk + 20.07_rk * self%a_v * WV * M)**0.45_rk)
+      ! Transmittance due to ozone absorption (Eq 8 Bird 1984, Eq 9 Bird & Riordan 1986, Eq 17 Gregg & Carder 1990)
+      T_oz = exp(-self%a_o * O3 * M_oz)
 
-         ! Transmittance due to uniformly mixed gas absorption - SHOULD use pressure corrected airmass
-         ! Eq 10 Bird 1984, Eq 11 Bird and Riordan 1986, Eq 18 Gregg & Carder 1990
-         ! Bird & Riordan use 118.93 rather than 118.3, but state 118.3 should be used in the future.
-         T_u = exp(-1.41_rk * self%a_u * M_prime / (1._rk + 118.3_rk * self%a_u * M_prime)**0.45_rk)
+      ! Transmittance due to water vapour absorption - should NOT use pressure-corrected airmass (see Bird and Riordan 1986)
+      ! Eq 8, Bird and Riordan 1986 (Eq 7 Bird 1984 is wrong, as mentioning in B&R, p 89), Eq 19 Gregg & Carder 1990
+      T_w = exp((-0.2385_rk * self%a_v * WV * M) / (1._rk + 20.07_rk * self%a_v * WV * M)**0.45_rk)
 
-         ! Transmittance terms that apply for both cloudy and clear skies.
-         T_g = T_oz * T_w * T_u
+      ! Transmittance due to uniformly mixed gas absorption - SHOULD use pressure corrected airmass
+      ! Eq 10 Bird 1984, Eq 11 Bird and Riordan 1986, Eq 18 Gregg & Carder 1990
+      ! Bird & Riordan use 118.93 rather than 118.3, but state 118.3 should be used in the future.
+      T_u = exp(-1.41_rk * self%a_u * M_prime / (1._rk + 118.3_rk * self%a_u * M_prime)**0.45_rk)
 
-         ! -------------------
-         ! clear skies part
-         ! -------------------
+      ! Transmittance terms that apply for both cloudy and clear skies.
+      T_g = T_oz * T_w * T_u
 
-         ! Transmittance due to Rayleigh scattering (use precomputed optical thickness)
-         T_r = exp(-M_prime * self%tau_r)
+      ! -------------------
+      ! clear skies part
+      ! -------------------
 
-         ! Transmittance due to aerosol absorption (Eq 26 Gregg & Carder 1990)
-         call navy_aerosol_model(AM, WM, wind_speed, relhum, visibility, costheta, alpha_a, beta_a, F_a, omega_a)
-         tau_a = beta_a * self%lambda**(-alpha_a)
-         T_a = exp(-tau_a * M)
+      ! Transmittance due to Rayleigh scattering (use precomputed optical thickness)
+      T_r = exp(-M_prime * self%tau_r)
 
-         ! Direct transmittance
-         T_dclr = T_r * T_a
+      ! Transmittance due to aerosol absorption (Eq 26 Gregg & Carder 1990)
+      call navy_aerosol_model(AM, WM, wind_speed, relhum, visibility, costheta, alpha_a, beta_a, F_a, omega_a)
+      tau_a = beta_a * self%lambda**(-alpha_a)
+      T_a = exp(-tau_a * M)
 
-         ! Separate absorption and scattering components of aerosol transmittance
-         T_aa = exp(-(1._rk - omega_a) * tau_a * M)
-         T_as = exp(-omega_a * tau_a * M)
-         T_sclr = T_aa * 0.5_rk * (1._rk - T_r**0.95_rk) + T_r**1.5_rk * T_aa * F_a * (1 - T_as)
+      ! Direct transmittance
+      T_dclr = T_r * T_a
 
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_alpha_a, alpha_a)
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_beta_a, beta_a)
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_omega_a, omega_a)
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_F_a, F_a)
+      ! Separate absorption and scattering components of aerosol transmittance
+      T_aa = exp(-(1._rk - omega_a) * tau_a * M)
+      T_as = exp(-omega_a * tau_a * M)
+      T_sclr = T_aa * 0.5_rk * (1._rk - T_r**0.95_rk) + T_r**1.5_rk * T_aa * F_a * (1 - T_as)
 
-         ! -------------------
-         ! cloudy skies part
-         ! -------------------
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_alpha_a, alpha_a)
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_beta_a, beta_a)
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_omega_a, omega_a)
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_F_a, F_a)
 
-         ! Transmittance due to absorption and scattering by clouds
-         call slingo(costheta, max(0._rk, LWP) * 1000, r_e, self%nlambda, self%lambda, T_dcld, T_scld)
+      ! -------------------
+      ! cloudy skies part
+      ! -------------------
 
-         ! Diffuse and direct irradiance streams (Eqs 1, 2 Gregg & Casey 2009)
-         ! These combine terms for clear and cloudy skies, weighted by cloud cover fraction
-         direct = self%exter * costheta * T_g * ((1._rk - cloud_cover) * T_dclr + cloud_cover * T_dcld)
-         diffuse = self%exter * costheta * T_g * ((1._rk - cloud_cover) * T_sclr + cloud_cover * T_scld)
+      ! Transmittance due to absorption and scattering by clouds
+      call slingo(costheta, max(0._rk, LWP) * 1000, r_e, self%nlambda, self%lambda, T_dcld, T_scld)
+
+      ! Diffuse and direct irradiance streams (Eqs 1, 2 Gregg & Casey 2009)
+      ! These combine terms for clear and cloudy skies, weighted by cloud cover fraction
+      direct = self%exter * costheta * T_g * ((1._rk - cloud_cover) * T_dclr + cloud_cover * T_dcld)
+      diffuse = self%exter * costheta * T_g * ((1._rk - cloud_cover) * T_sclr + cloud_cover * T_scld)
+
+      spectrum = direct + diffuse
+      par_J = sum(self%par_weights * spectrum)
+      swr_J = sum(self%swr_weights * spectrum)
+      par_E = sum(self%par_E_weights * spectrum)
+      uv_J  = sum(self%uv_weights * spectrum)
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_sf, par_J)  ! Photosynthetically Active Radiation (W/m2)
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_E_sf,par_E) ! Photosynthetically Active Radiation (umol/m2/s)
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_sf,  swr_J) ! Total shortwave radiation (W/m2) [up to 4000 nm]
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_uv_sf, uv_J)    ! UV (W/m2)
+
+      swr_J = sum(self%swr_weights * diffuse)
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_dif_sf, swr_J)
+
+      if (allocated(self%id_surface_band_dir)) then
+         do l = 1, self%nlambda
+            _SET_HORIZONTAL_DIAGNOSTIC_(self%id_surface_band_dir(l), direct(l))
+            _SET_HORIZONTAL_DIAGNOSTIC_(self%id_surface_band_dif(l), diffuse(l))
+         end do
+      end if
+
+      ! Sea surface reflectance
+      call reflectance(self%nlambda, self%F, theta, wind_speed, rho_d, rho_s)
+
+      ! Incorporate the loss due to reflectance
+      direct = direct * (1._rk - rho_d)
+      diffuse = diffuse * (1._rk - rho_s)
+      spectrum = direct + diffuse
+
+      par_J = sum(self%par_weights * spectrum)
+      swr_J = sum(self%swr_weights * spectrum)
+      par_E = sum(self%par_E_weights * spectrum)
+      uv_J  = sum(self%uv_weights * spectrum)
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_sf_w, par_J)  ! Photosynthetically Active Radiation (W/m2)
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_E_sf_w,par_E) ! Photosynthetically Active Radiation (umol/m2/s)
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_sf_w,  swr_J) ! Total shortwave radiation (W/m2) [up to 4000 nm]
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_uv_sf_w, uv_J)    ! UV (W/m2)
+
+      _VERTICAL_LOOP_BEGIN_
+         ! Compute absorption, total scattering and backscattering in current layer from IOPs
+         a = self%a_w
+         b = self%b_w
+         b_b = 0.5_rk * self%b_w
+         do i_iop = 1, size(self%iops)
+            _GET_(self%iops(i_iop)%id_c, c_iop)
+            a = a + c_iop * self%iops(i_iop)%a
+            b = b + c_iop * self%iops(i_iop)%b
+            b_b = b_b + c_iop * self%iops(i_iop)%b_b * self%iops(i_iop)%b
+         end do
+
+         ! Direct/diffuse attentuation and conversion from direct to diffuse in top half of the layer
+         _GET_(self%id_h, h)
+         f_att_d = exp(-0.5_rk * (a + b) * h / costheta)
+         f_att_s = exp(-0.5_rk * (a + b_b) * h / mcosthetas)
+         f_prod_s = exp(-0.5_rk * a * h / costheta) - f_att_d
+
+         ! From top to centre of layer
+         direct = direct * f_att_d
+         diffuse = diffuse * f_att_s + direct * f_prod_s
 
          spectrum = direct + diffuse
          par_J = sum(self%par_weights * spectrum)
          swr_J = sum(self%swr_weights * spectrum)
          par_E = sum(self%par_E_weights * spectrum)
          uv_J  = sum(self%uv_weights * spectrum)
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_sf, par_J)  ! Photosynthetically Active Radiation (W/m2)
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_E_sf,par_E) ! Photosynthetically Active Radiation (umol/m2/s)
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_sf,  swr_J) ! Total shortwave radiation (W/m2) [up to 4000 nm]
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_uv_sf, uv_J)    ! UV (W/m2)
-
-         swr_J = sum(self%swr_weights * diffuse)
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_dif_sf, swr_J)
-
-         if (allocated(self%id_surface_band_dir)) then
-            do l = 1, self%nlambda
-               _SET_HORIZONTAL_DIAGNOSTIC_(self%id_surface_band_dir(l), direct(l))
-               _SET_HORIZONTAL_DIAGNOSTIC_(self%id_surface_band_dif(l), diffuse(l))
-            end do
-         end if
-
-         ! Sea surface reflectance
-         call reflectance(self%nlambda, self%F, theta, wind_speed, rho_d, rho_s)
-
-         ! Incorporate the loss due to reflectance
-         direct = direct * (1._rk - rho_d)
-         diffuse = diffuse * (1._rk - rho_s)
-         spectrum = direct + diffuse
-
-         par_J = sum(self%par_weights * spectrum)
-         swr_J = sum(self%swr_weights * spectrum)
-         par_E = sum(self%par_E_weights * spectrum)
-         uv_J  = sum(self%uv_weights * spectrum)
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_sf_w, par_J)  ! Photosynthetically Active Radiation (W/m2)
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_E_sf_w,par_E) ! Photosynthetically Active Radiation (umol/m2/s)
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_sf_w,  swr_J) ! Total shortwave radiation (W/m2) [up to 4000 nm]
-         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_uv_sf_w, uv_J)    ! UV (W/m2)
-
-      _HORIZONTAL_LOOP_END_
-
-   end subroutine do_surface
+         _SET_DIAGNOSTIC_(self%id_par, par_J)   ! Photosynthetically Active Radiation (W/m2)
+         _SET_DIAGNOSTIC_(self%id_par_E, par_E) ! Photosynthetically Active Radiation (umol/m2/s)
+         _SET_DIAGNOSTIC_(self%id_swr,  swr_J)  ! Total shortwave radiation (W/m2) [up to 4000 nm]
+         _SET_DIAGNOSTIC_(self%id_uv, uv_J)     ! UV (W/m2)
+         
+         ! From centre to bottom of layer
+         direct = direct * f_att_d
+         diffuse = diffuse * f_att_s + direct * f_prod_s
+      _VERTICAL_LOOP_END_
+   end subroutine get_light
 
    subroutine calculate_integral_weights(xl, xr, n, x, w)
       integer,  intent(in)  :: n
@@ -591,6 +698,10 @@ contains
       beta = tau_a550 * 550._rk**alpha
 
       ! Asymmetry parameter (Eq 35 Gregg & Carder 1990) - called alpha in Gregg & Casey 2009
+      ! Range: 0.65 (alpha >= 1.2) to 0.82 (alpha <= 0)
+      ! For comparison:
+      ! - Bird 1984 (Eq 15) uses cos_theta_bar = 0.64 [implied by value of F_a]
+      ! - Bird & Riordan 1986 (p 91) use cos_theta_bar = 0.65
       cos_theta_bar = -0.1417_rk * min(max(0._rk, alpha), 1.2_rk) + 0.82_rk
 
       ! Forward scattering probability (Eqs 31-34 Gregg & Carder 1990)
@@ -603,6 +714,7 @@ contains
 
       ! Single scattering albedo (Eq 36 Gregg & Carder 1990)
       ! For comparison:
+      ! - Bird 1984 (Eq 15) uses omega_a = 0.928
       ! - Bird & Riordan 1986 (p 91) use omega_a = 0.945 at 400 nm for rural aerosols (AM = 10)
       ! - Shettle and Fenn 1979 (tables 28-35) report 0.982 at RH=0% to 0.9986 at RH=99% at 550 nm for their maritime aerosol model (AM=1)
       omega_a = (-0.0032_rk * AM + 0.972_rk) * exp(3.06e-2_rk * relhum)
