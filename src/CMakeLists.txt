@@ -13,6 +13,7 @@ add_library(spectral_test SHARED
             $<TARGET_OBJECTS:fabm_models_spectral>
            )
 target_link_libraries(spectral_test fabm)
+target_include_directories(spectral_test PRIVATE $<TARGET_PROPERTY:fabm_models_spectral,INTERFACE_INCLUDE_DIRECTORIES>)
 
 #-----------------------------------------------------------------------
 # Copyright (C) 2018 - PML
