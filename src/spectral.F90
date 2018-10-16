@@ -139,10 +139,12 @@ contains
             call interp(size(lambda_dinoflagellates), lambda_dinoflagellates, a_dinoflagellates, self%nlambda, self%lambda, self%iops(i_iop)%a)
             call interp(size(lambda_dinoflagellates), lambda_dinoflagellates, b_dinoflagellates, self%nlambda, self%lambda, self%iops(i_iop)%b)
             self%iops(i_iop)%b_b = 0.0029 ! Gregg & Rousseau 2016 but originally Morel 1988
-         case (6) ! detritus (small, as described in Gregg & Rousseau 2016.
+         case (6) ! detritus (small, as described in Gregg & Rousseau 2016)
+            ! Parameters below match the small organic detritus parametrization of Gallegos et al. 2011 (table 2) - the latter also offers a paramerizaton for large detritus.
+            ! Note: Gallegos et al. 2011 constants are specific to dry weight! Did Gregg & Rousseau 2016 misinterpret them as specific to carbon weight?
             ! NB 12.0107 converts from mg-1 to mmol-1
             self%iops(i_iop)%a(:) = 8e-5_rk * exp(-0.013_rk * (self%lambda - 440_rk)) * 12.0107_rk
-            self%iops(i_iop)%b(:) = 0.00115_rk * sqrt(550._rk / self%lambda) * 12.0107_rk
+            self%iops(i_iop)%b(:) = 0.00115_rk * (550._rk / self%lambda)**0.5_rk * 12.0107_rk
             self%iops(i_iop)%b_b = 0.005_rk
          !case (7) ! PIC
          !   self%iops(i_iop)%a(:) = 0
@@ -219,7 +221,7 @@ contains
       call self%register_diagnostic_variable(self%id_uv,      'uv',      'W/m^2',      'downwelling ultraviolet radiative flux', source=source_do_column)
       call self%register_diagnostic_variable(self%id_par,     'par',     'W/m^2',      'downwelling photosynthetic radiative flux', standard_variable=standard_variables%downwelling_photosynthetic_radiative_flux, source=source_do_column)
       call self%register_diagnostic_variable(self%id_par_E,   'par_E',   'umol/m^2/s', 'downwelling photosynthetic photon flux', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_swr_abs, 'swr_abs', 'W/m^3',      'absorption of shortwave flux', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_swr_abs, 'swr_abs', 'W/m^2',      'absorption of shortwave energy in layer', source=source_do_column)
 
       ! Interpolate absorption and scattering spectra to user wavelength grid
       allocate(self%a_w(self%nlambda), self%b_w(self%nlambda))
@@ -474,7 +476,7 @@ contains
 
          ! Compute remaining downwelling shortwave flux and from that, absorption [heating]
          swr_J = sum(self%swr_weights * spectrum)
-         _SET_DIAGNOSTIC_(self%id_swr_abs, (swr_top - swr_J) / h)
+         _SET_DIAGNOSTIC_(self%id_swr_abs, swr_top - swr_J)
       _VERTICAL_LOOP_END_
    end subroutine get_light
 
