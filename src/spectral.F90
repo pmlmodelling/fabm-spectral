@@ -24,7 +24,7 @@ module fabm_spectral
    end type
 
    type,extends(type_particle_model), public :: type_spectral
-      type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E
+      type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_swr_abs
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf_w, id_par_sf_w, id_uv_sf_w, id_par_E_sf_w
       type (type_horizontal_diagnostic_variable_id) :: id_alpha_a, id_beta_a, id_omega_a, id_F_a
@@ -76,7 +76,7 @@ contains
       character(len=8) :: strwavelength, strindex
 
       integer, parameter :: exter_source = 2
-      
+
       ! Coefficients for wavelength dependence of foam reflectance (Eqs A11, A12 in Gregg & Casey 2009)
       real(rk), parameter :: a0 = 0.9976_rk
       real(rk), parameter :: a1 = 0.2194_rk
@@ -195,24 +195,31 @@ contains
       call self%register_dependency(self%id_air_mass_type, type_horizontal_standard_variable('aerosol_air_mass_type', '-'))
       call self%register_dependency(self%id_mean_wind_speed, temporal_mean(self%id_wind_speed, period=86400._rk, resolution=3600._rk))
 
-      call self%register_diagnostic_variable(self%id_swr, 'swr',     'W/m^2',     'downwelling shortwave flux', standard_variable=standard_variables%downwelling_shortwave_flux, source=source_do_column)
-      call self%register_diagnostic_variable(self%id_uv,  'uv',      'W/m^2',     'downwelling ultraviolet radiative flux', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_par, 'par',     'W/m^2',     'downwelling photosynthetic radiative flux', standard_variable=standard_variables%downwelling_photosynthetic_radiative_flux, source=source_do_column)
-      call self%register_diagnostic_variable(self%id_par_E, 'par_E', 'umol/m^2/s','downwelling photosynthetic photon flux', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_swr_sf,     'swr_sf',     'W/m^2',     'downwelling shortwave flux in air', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_swr_dif_sf, 'swr_dif_sf', 'W/m^2',     'diffuse downwelling shortwave flux in air', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_uv_sf,      'uv_sf',      'W/m^2',     'downwelling ultraviolet radiative flux in air', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_par_sf,     'par_sf',     'W/m^2',     'downwelling photosynthetic radiative flux in air', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_par_E_sf,   'par_E_sf',   'umol/m^2/s','downwelling photosynthetic photon flux in air', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_swr_sf_w,   'swr_sf_w',   'W/m^2',     'downwelling shortwave flux in water', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_uv_sf_w,    'uv_sf_w',    'W/m^2',     'downwelling ultraviolet radiative flux in water', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_par_sf_w,   'par_sf_w',   'W/m^2',     'downwelling photosynthetic radiative flux in water', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_par_E_sf_w, 'par_E_sf_w', 'umol/m^2/s','downwelling photosynthetic photon flux in water', source=source_do_column)
-
-      call self%register_diagnostic_variable(self%id_alpha_a, 'alpha_a', '-', 'aerosol Angstrom exponent', source=source_do_column)
+      ! Aerosol properties
+      call self%register_diagnostic_variable(self%id_alpha_a, 'alpha_a', '-', 'aerosol Angstrom exponent', standard_variable=type_horizontal_standard_variable('angstrom_exponent_of_ambient_aerosol_in_air', '-'), source=source_do_column)
       call self%register_diagnostic_variable(self%id_beta_a, 'beta_a', '-', 'aerosol scale factor for optical thickness', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_omega_a, 'omega_a', '-', 'aerosol single scattering albedo', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_omega_a, 'omega_a', '-', 'aerosol single scattering albedo', standard_variable=type_horizontal_standard_variable('single_scattering_albedo_in_air_due_to_ambient_aerosol_particles', '-'), source=source_do_column)
       call self%register_diagnostic_variable(self%id_F_a, 'F_a', '-', 'aerosol forward scattering probability', source=source_do_column)
+
+      ! Bulk irradiance above water surface
+      call self%register_diagnostic_variable(self%id_swr_sf,     'swr_sf',     'W/m^2',      'downwelling shortwave flux in air',                source=source_do_column)
+      call self%register_diagnostic_variable(self%id_swr_dif_sf, 'swr_dif_sf', 'W/m^2',      'diffuse downwelling shortwave flux in air',        source=source_do_column)
+      call self%register_diagnostic_variable(self%id_uv_sf,      'uv_sf',      'W/m^2',      'downwelling ultraviolet radiative flux in air',    source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_sf,     'par_sf',     'W/m^2',      'downwelling photosynthetic radiative flux in air', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_E_sf,   'par_E_sf',   'umol/m^2/s', 'downwelling photosynthetic photon flux in air',    source=source_do_column)
+
+      ! Bulk irradiance below water surface
+      call self%register_diagnostic_variable(self%id_swr_sf_w,   'swr_sf_w',   'W/m^2',      'downwelling shortwave flux in water',                source=source_do_column)
+      call self%register_diagnostic_variable(self%id_uv_sf_w,    'uv_sf_w',    'W/m^2',      'downwelling ultraviolet radiative flux in water',    source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_sf_w,   'par_sf_w',   'W/m^2',      'downwelling photosynthetic radiative flux in water', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_E_sf_w, 'par_E_sf_w', 'umol/m^2/s', 'downwelling photosynthetic photon flux in water',    source=source_do_column)
+
+      ! Bulk irradiance within the water column
+      call self%register_diagnostic_variable(self%id_swr,     'swr',     'W/m^2',      'downwelling shortwave flux', standard_variable=standard_variables%downwelling_shortwave_flux, source=source_do_column)
+      call self%register_diagnostic_variable(self%id_uv,      'uv',      'W/m^2',      'downwelling ultraviolet radiative flux', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par,     'par',     'W/m^2',      'downwelling photosynthetic radiative flux', standard_variable=standard_variables%downwelling_photosynthetic_radiative_flux, source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_E,   'par_E',   'umol/m^2/s', 'downwelling photosynthetic photon flux', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_swr_abs, 'swr_abs', 'W/m^3',      'absorption of shortwave flux', source=source_do_column)
 
       ! Interpolate absorption and scattering spectra to user wavelength grid
       allocate(self%a_w(self%nlambda), self%b_w(self%nlambda))
@@ -298,7 +305,7 @@ contains
       real(rk), dimension(self%nlambda) :: a, b, b_b
       real(rk), dimension(self%nlambda) :: f_att_d, f_att_s, f_prod_s
       integer :: i_iop
-      real(rk) :: c_iop, h
+      real(rk) :: c_iop, h, swr_top
 
       _GET_HORIZONTAL_(self%id_lon, longitude)
       _GET_HORIZONTAL_(self%id_lat, latitude)
@@ -426,6 +433,9 @@ contains
       _SET_HORIZONTAL_DIAGNOSTIC_(self%id_uv_sf_w, uv_J)    ! UV (W/m2)
 
       _VERTICAL_LOOP_BEGIN_
+         ! Save downwelling shortwave flux at top of the layer
+         swr_top = swr_J
+
          ! Compute absorption, total scattering and backscattering in current layer from IOPs
          a = self%a_w
          b = self%b_w
@@ -446,8 +456,8 @@ contains
          ! From top to centre of layer
          direct = direct * f_att_d
          diffuse = diffuse * f_att_s + direct * f_prod_s
-
          spectrum = direct + diffuse
+
          par_J = sum(self%par_weights * spectrum)
          swr_J = sum(self%swr_weights * spectrum)
          par_E = sum(self%par_E_weights * spectrum)
@@ -456,10 +466,15 @@ contains
          _SET_DIAGNOSTIC_(self%id_par_E, par_E) ! Photosynthetically Active Radiation (umol/m2/s)
          _SET_DIAGNOSTIC_(self%id_swr,  swr_J)  ! Total shortwave radiation (W/m2) [up to 4000 nm]
          _SET_DIAGNOSTIC_(self%id_uv, uv_J)     ! UV (W/m2)
-         
+
          ! From centre to bottom of layer
          direct = direct * f_att_d
          diffuse = diffuse * f_att_s + direct * f_prod_s
+         spectrum = direct + diffuse
+
+         ! Compute remaining downwelling shortwave flux and from that, absorption [heating]
+         swr_J = sum(self%swr_weights * spectrum)
+         _SET_DIAGNOSTIC_(self%id_swr_abs, (swr_top - swr_J) / h)
       _VERTICAL_LOOP_END_
    end subroutine get_light
 
