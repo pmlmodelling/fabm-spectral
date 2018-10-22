@@ -8,7 +8,7 @@ add_library(fabm_models_spectral OBJECT
 target_include_directories(fabm_models_spectral PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 add_dependencies(fabm_models_spectral fabm_base)
 
-add_library(spectral_test SHARED
+add_library(spectral_test SHARED EXCLUDE_FROM_ALL
             spectral_test.F90
             $<TARGET_OBJECTS:fabm_models_spectral>
            )
