@@ -6,7 +6,7 @@ instances:
     parameters:
       lambda_method: 1
       save_spectra: true
-      n_iop: 7
+      n_iop: 10
       iop1_type: 1
       iop2_type: 2
       iop3_type: 3
@@ -14,6 +14,9 @@ instances:
       iop5_type: 6
       iop6_type: 6
       iop7_type: 6
+      iop8_type: 8
+      iop9_type: 8
+      iop10_type: 8
     coupling:
       iop1: P1
       iop2: P2
@@ -22,6 +25,9 @@ instances:
       iop5: R4
       iop6: R6
       iop7: R8
+      iop8: R1
+      iop9: R2
+      iop10: R3
   relhum:
     model: spectral/relhum
   viz:
@@ -188,7 +194,6 @@ instances:
     parameters:
       composition: cnpsf                                   # elemental composition
       resuspension: true                                   # enable resuspension, default = false
-      vel_crit: 0.02                                       # critical shear velocity for resuspension (m/s), default = 0.02
       c0: 0.001                                            # background carbon concentration (mg C/m^2), default = 0.0
     initialization:
       c: 3052.0                                            # carbon (mg C/m^2)
