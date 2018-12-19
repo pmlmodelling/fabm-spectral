@@ -5,7 +5,6 @@ instances:
     model: spectral/spectral
     parameters:
       lambda_method: 1
-      save_spectra: true
       n_iop: 10
       iop1_type: 1
       iop2_type: 2
@@ -17,6 +16,14 @@ instances:
       iop8_type: 8
       iop9_type: 8
       iop10_type: 8
+      spectral_output: 2
+      nlambda_out: 6
+      lambda1_out: 412
+      lambda2_out: 443
+      lambda3_out: 490
+      lambda4_out: 510
+      lambda5_out: 555
+      lambda6_out: 665
     coupling:
       iop1: P1
       iop2: P2

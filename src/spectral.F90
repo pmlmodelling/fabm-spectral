@@ -24,7 +24,7 @@ module fabm_spectral
    end type
 
    type,extends(type_particle_model), public :: type_spectral
-      type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_swr_abs
+      type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_swr_abs, id_secchi
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf_w, id_par_sf_w, id_uv_sf_w, id_par_E_sf_w
       type (type_horizontal_diagnostic_variable_id) :: id_alpha_a, id_beta_a, id_omega_a, id_F_a
@@ -34,11 +34,14 @@ module fabm_spectral
       integer :: nlambda
       type (type_horizontal_diagnostic_variable_id), dimension(:), allocatable :: id_surface_band_dir, id_surface_band_dif
       type (type_diagnostic_variable_id), dimension(:), allocatable :: id_band_dir, id_band_dif
-      real(rk), dimension(:), allocatable :: lambda, lambda_bounds, par_weights, par_E_weights, swr_weights, uv_weights, F
+      type (type_diagnostic_variable_id), dimension(:,:), allocatable :: id_a_iop
+      real(rk), dimension(:), allocatable :: lambda, lambda_bounds, par_weights, par_E_weights, swr_weights, uv_weights, F, lambda_out
       real(rk), dimension(:), allocatable :: exter
       real(rk), dimension(:), allocatable :: a_o, a_u, a_v, tau_r
       real(rk), dimension(:), allocatable :: a_w, b_w
       type (type_iop), allocatable :: iops(:)
+      integer :: l490_l
+      integer :: spectral_output
    contains
       procedure :: initialize
       procedure :: get_light
@@ -72,8 +75,8 @@ contains
       integer :: lambda_method
       integer :: n_iop, i_iop, iop_type
       real(rk) :: lambda_min, lambda_max
-      logical :: save_spectra
-      character(len=8) :: strwavelength, strindex
+      integer :: nlambda_out
+      character(len=8) :: strwavelength, strindex, strindex2
 
       integer, parameter :: exter_source = 2
 
@@ -109,7 +112,6 @@ contains
          allocate(self%lambda(self%nlambda), self%lambda_bounds(self%nlambda + 1))
          self%lambda(:) = lambda_oasim
       end select
-      call self%get_parameter(save_spectra, 'save_spectra', '', 'save full spectral irradiance', default=.false.)
 
       call self%get_parameter(n_iop, 'n_iop', '', 'number of inherent optical properties (IOPs)', default=0)
       allocate(self%iops(n_iop))
@@ -140,7 +142,7 @@ contains
             call interp(size(lambda_dinoflagellates), lambda_dinoflagellates, b_dinoflagellates, self%nlambda, self%lambda, self%iops(i_iop)%b)
             self%iops(i_iop)%b_b = 0.0029 ! Gregg & Rousseau 2016 but originally Morel 1988
          case (6) ! detritus (small, as described in Gregg & Rousseau 2016)
-            ! Parameters below match the small organic detritus parametrization of Gallegos et al. 2011 (table 2) - the latter also offers a paramerizaton for large detritus.
+            ! Parameters below match the small organic detritus parametrization of Gallegos et al. 2011 (table 2) - the latter also offers a parametrizaton for large detritus.
             ! Note: Gallegos et al. 2011 constants are specific to dry weight! Did Gregg & Rousseau 2016 misinterpret them as specific to carbon weight?
             ! NB 12.0107 converts from mg-1 to mmol-1
             self%iops(i_iop)%a(:) = 8e-5_rk * exp(-0.013_rk * (self%lambda - 440_rk)) * 12.0107_rk
@@ -221,7 +223,8 @@ contains
       call self%register_diagnostic_variable(self%id_uv,      'uv',      'W/m^2',      'downwelling ultraviolet radiative flux', source=source_do_column)
       call self%register_diagnostic_variable(self%id_par,     'par',     'W/m^2',      'downwelling photosynthetic radiative flux', standard_variable=standard_variables%downwelling_photosynthetic_radiative_flux, source=source_do_column)
       call self%register_diagnostic_variable(self%id_par_E,   'par_E',   'umol/m^2/s', 'downwelling photosynthetic photon flux', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_swr_abs, 'swr_abs', 'W/m^2',      'absorption of shortwave energy in layer', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_swr_abs, 'swr_abs', 'W/m^2',      'absorption of shortwave energy in layer', standard_variable=standard_variables%net_rate_of_absorption_of_shortwave_energy_in_layer, source=source_do_column)
+      !call self%register_diagnostic_variable(self%id_secchi,  'secchi',  'm',          'Secchi depth (1.7/Kd 490)', standard_variable=standard_variables%secchi_depth, source=source_do_column)
 
       ! Interpolate absorption and scattering spectra to user wavelength grid
       allocate(self%a_w(self%nlambda), self%b_w(self%nlambda))
@@ -263,22 +266,49 @@ contains
          end if
       end do
 
-      if (save_spectra) then
-         allocate(self%id_surface_band_dir(self%nlambda))
-         allocate(self%id_surface_band_dif(self%nlambda))
-         allocate(self%id_band_dir(self%nlambda))
-         allocate(self%id_band_dif(self%nlambda))
-         do l = 1, self%nlambda
-            if (self%lambda(l) < 1000._rk) then
-               write(strwavelength, '(f5.1)') self%lambda(l)
+      !self%l490_l = self%nlambda - 1
+      !do l = 1, self%nlambda - 1
+      !   if (self%lambda(l) >= 490._rk) then
+      !      self%l490_l = l
+      !      exit
+      !   end if
+      !end do
+
+      call self%get_parameter(self%spectral_output, 'spectral_output', '', 'spectral output (0: none, 1: full, 2: selected wavelengths)', default=0)
+      select case (self%spectral_output)
+      case (1)
+         allocate(self%lambda_out(self%nlambda))
+         self%lambda_out(:) = self%lambda
+      case (2)
+         call self%get_parameter(nlambda_out, 'nlambda_out', '', 'number of wavebands for spectral output')
+         allocate(self%lambda_out(nlambda_out))
+         do l = 1, nlambda_out
+            write(strindex, '(i0)') l
+            call self%get_parameter(self%lambda_out(l), 'lambda' // trim(strindex) // '_out', '', 'output wavelength ' // trim(strindex))
+         end do
+      end select
+
+      if (allocated(self%lambda_out)) then
+         allocate(self%id_surface_band_dir(size(self%lambda_out)))
+         allocate(self%id_surface_band_dif(size(self%lambda_out)))
+         allocate(self%id_band_dir(size(self%lambda_out)))
+         allocate(self%id_band_dif(size(self%lambda_out)))
+         allocate(self%id_a_iop(size(self%lambda_out), size(self%iops)))
+         do l = 1, size(self%lambda_out)
+            if (self%lambda_out(l) < 1000._rk) then
+               write(strwavelength, '(f5.1)') self%lambda_out(l)
             else
-               write(strwavelength, '(f6.1)') self%lambda(l)
+               write(strwavelength, '(f6.1)') self%lambda_out(l)
             end if
             write(strindex, '(i0)') l
             call self%register_diagnostic_variable(self%id_surface_band_dir(l), 'dir_sf_band' // trim(strindex), 'W/m2/nm', 'downward direct irradiance in air @ ' // trim(strwavelength) // ' nm', source=source_do_column)
             call self%register_diagnostic_variable(self%id_surface_band_dif(l), 'dif_sf_band' // trim(strindex), 'W/m2/nm', 'downward diffuse irradiance in air @ ' // trim(strwavelength) // ' nm', source=source_do_column)
             !call self%register_diagnostic_variable(self%id_band_dir(l), 'dir_band' // trim(strindex), 'W/m2/nm', 'direct irradiance @ ' // trim(strwavelength) // ' nm', source=source_do_column)
             !call self%register_diagnostic_variable(self%id_band_dif(l), 'dif_band' // trim(strindex), 'W/m2/nm', 'diffuse irradiance @ ' // trim(strwavelength) // ' nm', source=source_do_column)
+            do i_iop = 1, size(self%iops)
+               write(strindex2, '(i0)') i_iop
+               call self%register_diagnostic_variable(self%id_a_iop(l, i_iop), 'a_iop' // trim(strindex2) // '_band' // trim(strindex), '1/m', 'absorption by IOP ' // trim(strindex2) // ' @ ' // trim(strwavelength) // ' nm', source=source_do_column)
+            end do
          end do
       end if
    end subroutine initialize
@@ -304,10 +334,13 @@ contains
       real(rk), dimension(self%nlambda) :: T_g, T_dclr, T_sclr, T_dcld, T_scld
       real(rk), dimension(self%nlambda) :: rho_d, rho_s
 
-      real(rk), dimension(self%nlambda) :: a, b, b_b
+      real(rk), dimension(self%nlambda) :: a, b, b_b, a_iop
       real(rk), dimension(self%nlambda) :: f_att_d, f_att_s, f_prod_s
+      real(rk), allocatable :: spectrum_out(:)
       integer :: i_iop
       real(rk) :: c_iop, h, swr_top
+
+      if (self%spectral_output == 2) allocate(spectrum_out(size(self%lambda_out)))
 
       _GET_HORIZONTAL_(self%id_lon, longitude)
       _GET_HORIZONTAL_(self%id_lat, latitude)
@@ -410,12 +443,22 @@ contains
       swr_J = sum(self%swr_weights * diffuse)
       _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_dif_sf, swr_J)
 
-      if (allocated(self%id_surface_band_dir)) then
+      select case (self%spectral_output)
+      case (1)
          do l = 1, self%nlambda
             _SET_HORIZONTAL_DIAGNOSTIC_(self%id_surface_band_dir(l), direct(l))
             _SET_HORIZONTAL_DIAGNOSTIC_(self%id_surface_band_dif(l), diffuse(l))
          end do
-      end if
+      case (2)
+         call interp(self%nlambda, self%lambda, direct, size(self%lambda_out), self%lambda_out, spectrum_out)
+         do l = 1, size(self%lambda_out)
+            _SET_HORIZONTAL_DIAGNOSTIC_(self%id_surface_band_dir(l), spectrum_out(l))
+         end do
+         call interp(self%nlambda, self%lambda, diffuse, size(self%lambda_out), self%lambda_out, spectrum_out)
+         do l = 1, size(self%lambda_out)
+            _SET_HORIZONTAL_DIAGNOSTIC_(self%id_surface_band_dif(l), spectrum_out(l))
+         end do
+      end select
 
       ! Sea surface reflectance
       call reflectance(self%nlambda, self%F, theta, wind_speed, rho_d, rho_s)
@@ -444,7 +487,19 @@ contains
          b_b = 0.5_rk * self%b_w
          do i_iop = 1, size(self%iops)
             _GET_(self%iops(i_iop)%id_c, c_iop)
-            a = a + c_iop * self%iops(i_iop)%a
+            a_iop = c_iop * self%iops(i_iop)%a
+            select case (self%spectral_output)
+            case (1)
+               do l = 1, self%nlambda
+                  _SET_DIAGNOSTIC_(self%id_a_iop(l, i_iop), a_iop(l))
+               end do
+            case (2)
+               call interp(self%nlambda, self%lambda, a_iop, size(self%lambda_out), self%lambda_out, spectrum_out)
+               do l = 1, size(self%lambda_out)
+                  _SET_DIAGNOSTIC_(self%id_a_iop(l, i_iop), spectrum_out(l))
+               end do
+            end select
+            a = a + a_iop
             b = b + c_iop * self%iops(i_iop)%b
             b_b = b_b + c_iop * self%iops(i_iop)%b_b * self%iops(i_iop)%b
          end do
@@ -477,6 +532,7 @@ contains
          ! Compute remaining downwelling shortwave flux and from that, absorption [heating]
          swr_J = sum(self%swr_weights * spectrum)
          _SET_DIAGNOSTIC_(self%id_swr_abs, swr_top - swr_J)
+         !_SET_DIAGNOSTIC_(self%id_secchi, 0._rk)
       _VERTICAL_LOOP_END_
    end subroutine get_light
 
@@ -840,7 +896,7 @@ contains
       f = g * g
 
       ! reciprocals of the effective cosine for diffuse upward and downward fluxes (Slingo 1989 Eqs 9 and 10)
-      ! JB 2018-09-12: Setting lower limit of U2 to 1, given that cosines cannot exceed 1 (thus its reciprocal cannot be lower than 1)      
+      ! JB 2018-09-12: Setting lower limit of U2 to 1, given that cosines cannot exceed 1 (thus its reciprocal cannot be lower than 1)
       U2 = max(1._rk, U1 * (1._rk - (1._rk - omega) / 7._rk / omega / beta0))
 
       alpha1 = U1 * (1._rk - omega * (1._rk - beta0))
