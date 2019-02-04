@@ -2,7 +2,6 @@
 
 module fabm_relhum
 
-   ! Spectral light model based on Bird 1984, Bird & Riordan 1986, Gregg &  Carder 1990, Gregg & Casey 2009
    ! Copyright PML 2018
 
    use fabm_types
@@ -24,7 +23,7 @@ contains
 
    subroutine initialize(self, configunit)
       class (type_relhum), intent(inout), target :: self
-      integer,            intent(in)            :: configunit
+      integer,             intent(in)            :: configunit
 
       call self%register_dependency(self%id_sphum, standard_variables%surface_specific_humidity)
       call self%register_dependency(self%id_airtemp, standard_variables%surface_temperature)
@@ -54,7 +53,7 @@ contains
 
       _HORIZONTAL_LOOP_BEGIN_
           _GET_HORIZONTAL_(self%id_sphum, qa)      ! Specific humidity (kg kg-1)
-          _GET_HORIZONTAL_(self%id_airtemp, ta)    ! 2m air temperature
+          _GET_HORIZONTAL_(self%id_airtemp, ta)    ! 2m air temperature (degrees Celsius)
           _GET_HORIZONTAL_(self%id_airpres, airp)  ! Surface air pressure (Pa)
 
           ! Get saturation vapor pressure from air temperature (Lowe 1977; taken from GOTM's humidity.F90)
