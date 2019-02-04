@@ -24,7 +24,7 @@ module fabm_spectral
    end type
 
    type,extends(type_particle_model), public :: type_spectral
-      type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_swr_abs, id_secchi
+      type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_par_E_scalar, id_par_J_scalar, id_swr_abs, id_secchi
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf_w, id_par_sf_w, id_uv_sf_w, id_par_E_sf_w
       type (type_horizontal_diagnostic_variable_id) :: id_alpha_a, id_beta_a, id_omega_a, id_F_a
@@ -144,9 +144,11 @@ contains
          case (6) ! detritus (small, as described in Gregg & Rousseau 2016)
             ! Parameters below match the small organic detritus parametrization of Gallegos et al. 2011 (table 2) - the latter also offers a parametrizaton for large detritus.
             ! Note: Gallegos et al. 2011 constants are specific to dry weight! Did Gregg & Rousseau 2016 misinterpret them as specific to carbon weight?
+            ! If so: Babin et al 2003 state 2.6 g DW per g C is representative for suspended OM
             ! NB 12.0107 converts from mg-1 to mmol-1
-            self%iops(i_iop)%a(:) = 8e-5_rk * exp(-0.013_rk * (self%lambda - 440_rk)) * 12.0107_rk
-            self%iops(i_iop)%b(:) = 0.00115_rk * (550._rk / self%lambda)**0.5_rk * 12.0107_rk
+            ! JB 14/1/2019: adding factor 2.6 (DW/C) discussed above as that seems like to make L4/WCO match much better.
+            self%iops(i_iop)%a(:) = 8e-5_rk * exp(-0.013_rk * (self%lambda - 440_rk)) * 12.0107_rk * 2.6_rk
+            self%iops(i_iop)%b(:) = 0.00115_rk * (550._rk / self%lambda)**0.5_rk * 12.0107_rk * 2.6_rk
             self%iops(i_iop)%b_b = 0.005_rk
          !case (7) ! PIC
          !   self%iops(i_iop)%a(:) = 0
@@ -205,24 +207,26 @@ contains
       call self%register_diagnostic_variable(self%id_omega_a, 'omega_a', '-', 'aerosol single scattering albedo', standard_variable=type_horizontal_standard_variable('single_scattering_albedo_in_air_due_to_ambient_aerosol_particles', '-'), source=source_do_column)
       call self%register_diagnostic_variable(self%id_F_a, 'F_a', '-', 'aerosol forward scattering probability', source=source_do_column)
 
-      ! Bulk irradiance above water surface
+      ! Horizontal downwelling irradiance just above the water surface (BEFORE reflection by water surface)
       call self%register_diagnostic_variable(self%id_swr_sf,     'swr_sf',     'W/m^2',      'downwelling shortwave flux in air',                source=source_do_column)
       call self%register_diagnostic_variable(self%id_swr_dif_sf, 'swr_dif_sf', 'W/m^2',      'diffuse downwelling shortwave flux in air',        source=source_do_column)
       call self%register_diagnostic_variable(self%id_uv_sf,      'uv_sf',      'W/m^2',      'downwelling ultraviolet radiative flux in air',    source=source_do_column)
       call self%register_diagnostic_variable(self%id_par_sf,     'par_sf',     'W/m^2',      'downwelling photosynthetic radiative flux in air', source=source_do_column)
       call self%register_diagnostic_variable(self%id_par_E_sf,   'par_E_sf',   'umol/m^2/s', 'downwelling photosynthetic photon flux in air',    source=source_do_column)
 
-      ! Bulk irradiance below water surface
+      ! Horizontal downwelling irradiance just below the water surface (AFTER reflection by water surface)
       call self%register_diagnostic_variable(self%id_swr_sf_w,   'swr_sf_w',   'W/m^2',      'downwelling shortwave flux in water',                source=source_do_column)
       call self%register_diagnostic_variable(self%id_uv_sf_w,    'uv_sf_w',    'W/m^2',      'downwelling ultraviolet radiative flux in water',    source=source_do_column)
       call self%register_diagnostic_variable(self%id_par_sf_w,   'par_sf_w',   'W/m^2',      'downwelling photosynthetic radiative flux in water', source=source_do_column)
       call self%register_diagnostic_variable(self%id_par_E_sf_w, 'par_E_sf_w', 'umol/m^2/s', 'downwelling photosynthetic photon flux in water',    source=source_do_column)
 
-      ! Bulk irradiance within the water column
+      ! Scalar downwelling irradiance within the water column
       call self%register_diagnostic_variable(self%id_swr,     'swr',     'W/m^2',      'downwelling shortwave flux', standard_variable=standard_variables%downwelling_shortwave_flux, source=source_do_column)
       call self%register_diagnostic_variable(self%id_uv,      'uv',      'W/m^2',      'downwelling ultraviolet radiative flux', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_par,     'par',     'W/m^2',      'downwelling photosynthetic radiative flux', standard_variable=standard_variables%downwelling_photosynthetic_radiative_flux, source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par,     'par',     'W/m^2',      'downwelling photosynthetic radiative flux', source=source_do_column)
       call self%register_diagnostic_variable(self%id_par_E,   'par_E',   'umol/m^2/s', 'downwelling photosynthetic photon flux', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_J_scalar,'par_J_scalar','W/m^2', 'scalar downwelling photosynthetic photon flux', standard_variable=standard_variables%downwelling_photosynthetic_radiative_flux, source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_E_scalar,'par_E_scalar','umol/m^2/s', 'scalar downwelling photosynthetic photon flux', source=source_do_column)
       call self%register_diagnostic_variable(self%id_swr_abs, 'swr_abs', 'W/m^2',      'absorption of shortwave energy in layer', standard_variable=standard_variables%net_rate_of_absorption_of_shortwave_energy_in_layer, source=source_do_column)
       !call self%register_diagnostic_variable(self%id_secchi,  'secchi',  'm',          'Secchi depth (1.7/Kd 490)', standard_variable=standard_variables%secchi_depth, source=source_do_column)
 
@@ -274,13 +278,13 @@ contains
       !   end if
       !end do
 
-      call self%get_parameter(self%spectral_output, 'spectral_output', '', 'spectral output (0: none, 1: full, 2: selected wavelengths)', default=0)
+      call self%get_parameter(self%spectral_output, 'spectral_output', '', 'spectral output (0: none, 1: full, 2: selected wavelengths)', default=0, minimum=0, maximum=2)
       select case (self%spectral_output)
       case (1)
          allocate(self%lambda_out(self%nlambda))
          self%lambda_out(:) = self%lambda
       case (2)
-         call self%get_parameter(nlambda_out, 'nlambda_out', '', 'number of wavebands for spectral output')
+         call self%get_parameter(nlambda_out, 'nlambda_out', '', 'number of wavebands for spectral output', minimum=1)
          allocate(self%lambda_out(nlambda_out))
          do l = 1, nlambda_out
             write(strindex, '(i0)') l
@@ -321,7 +325,8 @@ contains
       !real(rk), parameter :: ga = 0.05_rk                ! Ground albedo (used by Bird & Riordan 1986, but discarded by Gregg & Carder 1990)
       real(rk), parameter :: H_oz = 22._rk                ! Height of maximum ozone concentration (km)
       real(rk), parameter :: r_e = (10._rk + 11.8_rk) / 2 ! Equivalent radius of cloud drop size distribution (um) based on mean of Kiehl et al. & Han et al. (cf OASIM)
-      real(rk), parameter :: mcosthetas = 0.831_rk        ! Mean of cosine of angle of diffuse radiation in water, assuming all angular contributions equal in air (Sathyendranath and Platt 1989, p 191)
+      real(rk), parameter :: mcosthetas = 0.831_rk        ! Mean of cosine of angle of diffuse radiation in water, assuming all angular contributions equal in air (Sathyendranath and Platt 1989, p 191) NB Ackleson et al 1994 use 0.9
+      real(rk), parameter :: r_s = 1.5_rk                 ! Shape factor representing mean backscatter coefficient of diffuse irradiance (r_d in Ackleson et al. 1994 p 7487)
 
       real(rk) :: longitude, latitude, yearday, cloud_cover, wind_speed, airpres, relhum, LWP, water_vapour, WV, WM, visibility, AM
       real(rk) :: days, hour, theta, costheta, alpha_a, beta_a
@@ -338,7 +343,7 @@ contains
       real(rk), dimension(self%nlambda) :: f_att_d, f_att_s, f_prod_s
       real(rk), allocatable :: spectrum_out(:)
       integer :: i_iop
-      real(rk) :: c_iop, h, swr_top
+      real(rk) :: c_iop, h, swr_top, costheta_r
 
       if (self%spectral_output == 2) allocate(spectrum_out(size(self%lambda_out)))
 
@@ -356,6 +361,7 @@ contains
       _GET_HORIZONTAL_(self%id_visibility, visibility)  ! Visibility (m)
       _GET_HORIZONTAL_(self%id_air_mass_type, AM)       ! Aerosol air mass type (1: open ocean, 10: continental)
 
+      if (cloud_cover > 0) LWP = LWP / cloud_cover
       WV = water_vapour / 10                ! from kg m-2 to cm
       O3 = O3 * (1000 / 48._rk) / 0.4462_rk ! from kg m-2 to mol m-2, then from mol m-2 to atm cm (Basher 1982)
       days = floor(yearday) + 1.0_rk
@@ -461,7 +467,7 @@ contains
       end select
 
       ! Sea surface reflectance
-      call reflectance(self%nlambda, self%F, theta, wind_speed, rho_d, rho_s)
+      call reflectance(self%nlambda, self%F, theta, wind_speed, rho_d, rho_s, costheta_r)
 
       ! Incorporate the loss due to reflectance
       direct = direct * (1._rk - rho_d)
@@ -504,11 +510,11 @@ contains
             b_b = b_b + c_iop * self%iops(i_iop)%b_b * self%iops(i_iop)%b
          end do
 
-         ! Direct/diffuse attentuation and conversion from direct to diffuse in top half of the layer
+         ! Transmissivity of direct/diffuse attentuation and conversion from direct to diffuse - for one half of the layer
          _GET_(self%id_h, h)
-         f_att_d = exp(-0.5_rk * (a + b) * h / costheta)
-         f_att_s = exp(-0.5_rk * (a + b_b) * h / mcosthetas)
-         f_prod_s = exp(-0.5_rk * a * h / costheta) - f_att_d
+         f_att_d = exp(-0.5_rk * (a + b) * h / costheta_r)         ! Gregg & Rousseau 2016 Eq 8
+         f_att_s = exp(-0.5_rk * (a + r_s * b_b) * h / mcosthetas) ! Gregg & Rousseau 2016 Eq 9
+         f_prod_s = exp(-0.5_rk * a * h / costheta_r) - f_att_d    ! Gregg & Rousseau 2016 Eq 14 but not accounting for backscattered fraction
 
          ! From top to centre of layer
          direct = direct * f_att_d
@@ -523,6 +529,13 @@ contains
          _SET_DIAGNOSTIC_(self%id_par_E, par_E) ! Photosynthetically Active Radiation (umol/m2/s)
          _SET_DIAGNOSTIC_(self%id_swr,  swr_J)  ! Total shortwave radiation (W/m2) [up to 4000 nm]
          _SET_DIAGNOSTIC_(self%id_uv, uv_J)     ! UV (W/m2)
+
+         ! Compute PAR on horizontal plane for comparison with sensor output
+         spectrum = direct / costheta_r + diffuse / mcosthetas
+         par_J = sum(self%par_weights * spectrum)
+         par_E = sum(self%par_E_weights * spectrum)
+         _SET_DIAGNOSTIC_(self%id_par_J_scalar, par_J) ! Scalar Photosynthetically Active Radiation (W/m2)
+         _SET_DIAGNOSTIC_(self%id_par_E_scalar, par_E) ! Scalar Photosynthetically Active Radiation (umol/m2/s)
 
          ! From centre to bottom of layer
          direct = direct * f_att_d
@@ -793,10 +806,10 @@ contains
       omega_a = (-0.0032_rk * AM + 0.972_rk) * exp(3.06e-2_rk * relhum)
    end subroutine
 
-   subroutine reflectance(nlambda, F, theta, W, rho_d, rho_s)
+   subroutine reflectance(nlambda, F, theta, W, rho_d, rho_s, costheta_r)
       integer, intent(in) :: nlambda
       real(rk), intent(in) :: F(nlambda), theta, W
-      real(rk), intent(out) :: rho_d(nlambda), rho_s(nlambda)
+      real(rk), intent(out) :: rho_d(nlambda), rho_s(nlambda), costheta_r
 
       ! Coefficients for foam reflectance-wind speed relationship (p1666 Gregg and Carder 1990)
       real(rk), parameter :: D1 = 2.2e-5_rk
@@ -807,11 +820,11 @@ contains
       ! Air density (g/m3)
       real(rk), parameter :: rho_a = 1.2e3_rk
 
-      ! Refractive index of seawater, Gregg and Carder 1990 p1667
+      ! Refractive index of seawater, Gregg and Carder 1990 p1667 (Kirk 2011 uses 1.33, described as "accurate enough")
       real(rk), parameter :: n_w = 1.341_rk
 
       real(rk) :: C_D, tau, rho_f_W, rho_f(nlambda)
-      real(rk) :: theta_r, b, rho_dsp, rho_ssp
+      real(rk) :: b, rho_dsp, rho_ssp, theta_r
 
       ! Drag coefficient (Eqs 42, 43 Gregg and Carder 1990)
       ! Constants match Trenberth et al. 1989 p1508 J Clim. However, they use different wind speed thresholds
@@ -860,6 +873,7 @@ contains
 
       rho_d = rho_dsp + rho_f
       rho_s = rho_ssp + rho_f
+      costheta_r = cos(theta_r)
    end subroutine
 
    subroutine slingo(mu0, LWP, r_e, nlambda, lambda, T_dcld, T_scld)
