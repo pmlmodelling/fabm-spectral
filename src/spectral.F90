@@ -25,7 +25,7 @@ module fabm_spectral
 
    type,extends(type_particle_model), public :: type_spectral
       type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_par_E_scalar, id_par_J_scalar, id_swr_abs, id_secchi
-      type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf, id_mean_wind_out
+      type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf, id_mean_wind_out, id_wind_out
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf_w, id_par_sf_w, id_uv_sf_w, id_par_E_sf_w
       type (type_horizontal_diagnostic_variable_id) :: id_alpha_a, id_beta_a, id_omega_a, id_F_a
       type (type_horizontal_dependency_id) :: id_lon, id_lat, id_cloud, id_wind_speed, id_airpres, id_relhum, id_lwp, id_O3, id_WV, id_mean_wind_speed, id_visibility, id_air_mass_type
@@ -206,6 +206,7 @@ contains
       call self%register_diagnostic_variable(self%id_beta_a, 'beta_a', '-', 'aerosol scale factor for optical thickness', source=source_do_column)
       call self%register_diagnostic_variable(self%id_omega_a, 'omega_a', '-', 'aerosol single scattering albedo', standard_variable=type_horizontal_standard_variable('single_scattering_albedo_in_air_due_to_ambient_aerosol_particles', '-'), source=source_do_column)
       call self%register_diagnostic_variable(self%id_F_a, 'F_a', '-', 'aerosol forward scattering probability', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_wind_out, 'wind', 'm/s', 'wind speed', source=source_do_column)
       call self%register_diagnostic_variable(self%id_mean_wind_out, 'mean_wind', 'm/s', 'daily mean wind speed', source=source_do_column)
 
       ! Horizontal downwelling irradiance just above the water surface (BEFORE reflection by water surface)
@@ -363,6 +364,7 @@ contains
       _GET_HORIZONTAL_(self%id_air_mass_type, AM)       ! Aerosol air mass type (1: open ocean, 10: continental)
 
       ! For debugging
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_wind_out, wind_speed)
       _SET_HORIZONTAL_DIAGNOSTIC_(self%id_mean_wind_out, WM)
 
       if (cloud_cover > 0) LWP = LWP / cloud_cover
