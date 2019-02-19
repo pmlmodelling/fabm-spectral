@@ -77,6 +77,7 @@ contains
       real(rk) :: lambda_min, lambda_max
       integer :: nlambda_out
       character(len=8) :: strwavelength, strindex, strindex2
+      logical :: compute_mean_wind
 
       integer, parameter :: exter_source = 2
 
@@ -199,7 +200,14 @@ contains
       call self%register_dependency(self%id_WV, type_horizontal_standard_variable('atmosphere_mass_content_of_water_vapor', 'kg m-2'))
       call self%register_dependency(self%id_visibility, type_horizontal_standard_variable('visibility_in_air', 'm'))
       call self%register_dependency(self%id_air_mass_type, type_horizontal_standard_variable('aerosol_air_mass_type', '-'))
-      call self%register_dependency(self%id_mean_wind_speed, temporal_mean(self%id_wind_speed, period=86400._rk, resolution=3600._rk))
+
+      call self%get_parameter(compute_mean_wind, 'compute_mean_wind', '', 'compute daily mean wind speed internally', default=.true.)
+      if (compute_mean_wind) then
+         call self%register_dependency(self%id_mean_wind_speed, temporal_mean(self%id_wind_speed, period=86400._rk, resolution=3600._rk))
+         call self%register_diagnostic_variable(self%id_mean_wind_out, 'mean_wind', 'm/s', 'daily mean wind speed', source=source_do_column)
+      else
+         call self%register_dependency(self%id_mean_wind_speed, 'mean_wind', 'm/s', 'daily mean wind speed')
+      end if
 
       ! Aerosol properties
       call self%register_diagnostic_variable(self%id_alpha_a, 'alpha_a', '-', 'aerosol Angstrom exponent', standard_variable=type_horizontal_standard_variable('angstrom_exponent_of_ambient_aerosol_in_air', '-'), source=source_do_column)
@@ -207,7 +215,6 @@ contains
       call self%register_diagnostic_variable(self%id_omega_a, 'omega_a', '-', 'aerosol single scattering albedo', standard_variable=type_horizontal_standard_variable('single_scattering_albedo_in_air_due_to_ambient_aerosol_particles', '-'), source=source_do_column)
       call self%register_diagnostic_variable(self%id_F_a, 'F_a', '-', 'aerosol forward scattering probability', source=source_do_column)
       call self%register_diagnostic_variable(self%id_wind_out, 'wind', 'm/s', 'wind speed', source=source_do_column)
-      call self%register_diagnostic_variable(self%id_mean_wind_out, 'mean_wind', 'm/s', 'daily mean wind speed', source=source_do_column)
 
       ! Horizontal downwelling irradiance just above the water surface (BEFORE reflection by water surface)
       call self%register_diagnostic_variable(self%id_swr_sf,     'swr_sf',     'W/m^2',      'downwelling shortwave flux in air',                source=source_do_column)
@@ -365,7 +372,7 @@ contains
 
       ! For debugging
       _SET_HORIZONTAL_DIAGNOSTIC_(self%id_wind_out, wind_speed)
-      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_mean_wind_out, WM)
+      if (_VARIABLE_REGISTERED_(self%id_mean_wind_out)) _SET_HORIZONTAL_DIAGNOSTIC_(self%id_mean_wind_out, WM)
 
       if (cloud_cover > 0) LWP = LWP / cloud_cover
       WV = water_vapour / 10                ! from kg m-2 to cm
