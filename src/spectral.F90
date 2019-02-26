@@ -374,9 +374,9 @@ contains
       _SET_HORIZONTAL_DIAGNOSTIC_(self%id_wind_out, wind_speed)
       if (_VARIABLE_REGISTERED_(self%id_mean_wind_out)) _SET_HORIZONTAL_DIAGNOSTIC_(self%id_mean_wind_out, WM)
 
-      if (cloud_cover > 0) LWP = LWP / cloud_cover
-      WV = water_vapour / 10                ! from kg m-2 to cm
-      O3 = O3 * (1000 / 48._rk) / 0.4462_rk ! from kg m-2 to mol m-2, then from mol m-2 to atm cm (Basher 1982)
+      if (cloud_cover > 0) LWP = LWP / cloud_cover  ! LWP is the mean density over a grid box (Jorn: ECMWF pers comm 26/2/2019), but we want the mean density per cloud-covered area
+      WV = water_vapour / 10                        ! from kg m-2 to cm
+      O3 = O3 * (1000 / 48._rk) / 0.4462_rk         ! from kg m-2 to mol m-2, then from mol m-2 to atm cm (Basher 1982)
       days = floor(yearday) + 1.0_rk
       hour = mod(yearday, 1.0_rk) * 24.0_rk
 
