@@ -91,7 +91,7 @@ contains
       real(rk), parameter :: b2 = 9.552e-6_rk
       real(rk), parameter :: b3 = -2.698e-9_rk
 
-      real(rk), parameter :: Planck = 6.62606957e-34     ! Planck constant (m2 kg/s)
+      real(rk), parameter :: Planck = 6.62606957e-34_rk  ! Planck constant (m2 kg/s)
       real(rk), parameter :: lightspeed = 299792458_rk   ! Speed of light (m/s)
       real(rk), parameter :: Avogadro = 6.02214129e23_rk ! Avogadro constant (/mol)
 
