@@ -25,7 +25,7 @@ module fabm_spectral
 
    type,extends(type_particle_model), public :: type_spectral
       type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_par_E_scalar, id_par_J_scalar, id_swr_abs, id_secchi
-      type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf, id_mean_wind_out, id_wind_out
+      type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf, id_mean_wind_out, id_wind_out, id_zen
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf_w, id_par_sf_w, id_uv_sf_w, id_par_E_sf_w
       type (type_horizontal_diagnostic_variable_id) :: id_alpha_a, id_beta_a, id_omega_a, id_F_a
       type (type_horizontal_dependency_id) :: id_lon, id_lat, id_cloud, id_wind_speed, id_airpres, id_relhum, id_lwp, id_O3, id_WV, id_mean_wind_speed, id_visibility, id_air_mass_type
@@ -78,6 +78,7 @@ contains
       integer :: nlambda_out
       character(len=8) :: strwavelength, strindex, strindex2
       logical :: compute_mean_wind
+      real(rk) :: lambda_ref_iop, a_star_iop, S_iop
 
       integer, parameter :: exter_source = 2
 
@@ -120,7 +121,7 @@ contains
          allocate(self%iops(i_iop)%a(self%nlambda))
          allocate(self%iops(i_iop)%b(self%nlambda))
          write(strindex, '(i0)') i_iop
-         call self%get_parameter(iop_type, 'iop'//trim(strindex)//'_type', '', 'type of IOP '//trim(strindex), default=0)
+         call self%get_parameter(iop_type, 'iop'//trim(strindex)//'_type', '', 'type of IOP '//trim(strindex), minimum=1, maximum=9)
          select case (iop_type)
          case (1) ! diatoms
             call interp(size(lambda_diatoms), lambda_diatoms, a_diatoms, self%nlambda, self%lambda, self%iops(i_iop)%a)
@@ -160,21 +161,30 @@ contains
             self%iops(i_iop)%a(:) = 2.98e-4_rk * exp(-0.014_rk * (self%lambda - 443_rk)) * 12.0107_rk
             self%iops(i_iop)%b(:) = 0
             self%iops(i_iop)%b_b = 0
+         case (9) ! Arbitrary carbon-specific absorption (and in the future, backscattering) spectra
+            ! NB 12.0107 converts from mg-1 to mmol-1
+            call self%get_parameter(lambda_ref_iop, 'lambda_a_iop'//trim(strindex), 'nm', 'reference wavelength for absorption by IOP '//trim(strindex))
+            call self%get_parameter(a_star_iop, 'a_star_iop'//trim(strindex), 'm2/mg C', 'mass-specific absorption coefficient for IOP '//trim(strindex)//' at reference wavelength')
+            call self%get_parameter(S_iop, 'S_iop'//trim(strindex), '-', 'exponent of absorption spectrum for IOP '//trim(strindex), minimum=0._rk)
+            self%iops(i_iop)%a(:) = a_star_iop * exp(-S_iop * (self%lambda - lambda_ref_iop)) * 12.0107_rk
+            self%iops(i_iop)%b(:) = 0
+            self%iops(i_iop)%b_b = 0
          end select
 
          ! Protect against negative coefficients caused by extrapolation beyond source spectrum boundaries.
          self%iops(i_iop)%a(:) = max(self%iops(i_iop)%a, 0._rk)
          self%iops(i_iop)%b(:) = max(self%iops(i_iop)%b, 0._rk)
 
-         ! Link to concentration metric (mmol carbon/m3 for organic carbon; mg chl/m3 for phytoplankton)
-         select case (iop_type)
-         case (6,7,8)
-            call self%register_dependency(self%iops(i_iop)%id_c, 'iop' // trim(strindex) // '_c', 'mmol C m-3', 'carbon in IOP ' // trim(strindex))
-            call self%request_coupling_to_model(self%iops(i_iop)%id_c, 'iop' // trim(strindex), standard_variables%total_carbon)
-         case default
+         ! Link to concentration metric to allow us to convert *specific* absorption/scattering into actual absorption and scattering (in m-1)
+         if (iop_type >=1 .and. iop_type <= 5) then
+            ! Phytoplankton: chlorophyll-specific absorpion and scattering
             call self%register_dependency(self%iops(i_iop)%id_c, 'iop' // trim(strindex) // '_chl', 'mg Chl m-3', 'chlorophyll in IOP ' // trim(strindex))
             call self%request_coupling_to_model(self%iops(i_iop)%id_c, 'iop' // trim(strindex), type_bulk_standard_variable(name='total_chlorophyll'))
-         end select
+         else
+            ! POM/DOM/PIC: carbon-specific absorpion and scattering
+            call self%register_dependency(self%iops(i_iop)%id_c, 'iop' // trim(strindex) // '_c', 'mmol C m-3', 'carbon in IOP ' // trim(strindex))
+            call self%request_coupling_to_model(self%iops(i_iop)%id_c, 'iop' // trim(strindex), standard_variables%total_carbon)
+         end if
       end do
 
       ! Find wavelength bounds of photosynthetically active radiation
@@ -208,6 +218,8 @@ contains
       else
          call self%register_dependency(self%id_mean_wind_speed, 'mean_wind', 'm/s', 'daily mean wind speed')
       end if
+
+      call self%register_diagnostic_variable(self%id_zen, 'zen', 'degrees', 'zenith angle', source=source_do_column)
 
       ! Aerosol properties
       call self%register_diagnostic_variable(self%id_alpha_a, 'alpha_a', '-', 'aerosol Angstrom exponent', standard_variable=type_horizontal_standard_variable('angstrom_exponent_of_ambient_aerosol_in_air', '-'), source=source_do_column)
@@ -377,12 +389,13 @@ contains
       if (cloud_cover > 0) LWP = LWP / cloud_cover  ! LWP is the mean density over a grid box (Jorn: ECMWF pers comm 26/2/2019), but we want the mean density per cloud-covered area
       WV = water_vapour / 10                        ! from kg m-2 to cm
       O3 = O3 * (1000 / 48._rk) / 0.4462_rk         ! from kg m-2 to mol m-2, then from mol m-2 to atm cm (Basher 1982)
-      days = floor(yearday) + 1.0_rk
+      days = floor(yearday)
       hour = mod(yearday, 1.0_rk) * 24.0_rk
 
       ! Calculate zenith angle (in radians)
       theta = zenith_angle(days, hour, longitude, latitude)
       theta = min(theta, 0.5_rk * pi)  ! Restrict the input zenith angle between 0 and pi/2
+      _SET_HORIZONTAL_DIAGNOSTIC_(self%id_zen, rad2deg * theta)
       costheta = cos(theta)
 
       ! Atmospheric path length, a.k.a. relative air mass (Eq 3 Bird 1984, Eq 5 Bird & Riordan 1986, Eq 13 Gregg & Carder 1990, Eq A5 in Casey & Gregg 2009)
