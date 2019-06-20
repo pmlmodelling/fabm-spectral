@@ -78,7 +78,7 @@ contains
       integer :: nlambda_out
       character(len=8) :: strwavelength, strindex, strindex2
       logical :: compute_mean_wind
-      real(rk) :: lambda_ref_iop, a_star_iop, S_iop
+      real(rk) :: lambda_ref_iop, a_star_iop, S_iop, b_star_iop, eta_iop, b_b_iop
 
       integer, parameter :: exter_source = 2
 
@@ -163,12 +163,20 @@ contains
             self%iops(i_iop)%b_b = 0
          case (9) ! Arbitrary carbon-specific absorption (and in the future, backscattering) spectra
             ! NB 12.0107 converts from mg-1 to mmol-1
-            call self%get_parameter(lambda_ref_iop, 'lambda_a_iop'//trim(strindex), 'nm', 'reference wavelength for absorption by IOP '//trim(strindex))
-            call self%get_parameter(a_star_iop, 'a_star_iop'//trim(strindex), 'm2/mg C', 'mass-specific absorption coefficient for IOP '//trim(strindex)//' at reference wavelength')
-            call self%get_parameter(S_iop, 'S_iop'//trim(strindex), '-', 'exponent of absorption spectrum for IOP '//trim(strindex), minimum=0._rk)
+            call self%get_parameter(a_star_iop, 'a_star_iop'//trim(strindex), 'm2/mg C', 'mass-specific absorption coefficient for IOP '//trim(strindex)//' at reference wavelength', minimum=0._rk, default=0._rk)
+            if (a_star_iop /= 0._rk) then
+               call self%get_parameter(lambda_ref_iop, 'lambda_a_iop'//trim(strindex), 'nm', 'reference wavelength for absorption by IOP '//trim(strindex))
+               call self%get_parameter(S_iop, 'S_iop'//trim(strindex), '-', 'exponent of absorption spectrum for IOP '//trim(strindex), minimum=0._rk)
+            end if
             self%iops(i_iop)%a(:) = a_star_iop * exp(-S_iop * (self%lambda - lambda_ref_iop)) * 12.0107_rk
-            self%iops(i_iop)%b(:) = 0
-            self%iops(i_iop)%b_b = 0
+
+            call self%get_parameter(b_star_iop, 'b_star_iop'//trim(strindex), 'm2/mg C', 'mass-specific scattering coefficient for IOP '//trim(strindex)//' at reference wavelength', minimum=0._rk, default=0._rk)
+            if (b_star_iop /= 0._rk) then
+               call self%get_parameter(lambda_ref_iop, 'lambda_b_iop'//trim(strindex), 'nm', 'reference wavelength for scattering by IOP '//trim(strindex))
+               call self%get_parameter(eta_iop, 'eta_iop'//trim(strindex), '-', 'exponent of scattering spectrum for IOP '//trim(strindex), minimum=0._rk)
+               call self%get_parameter(self%iops(i_iop)%b_b, 'b_b_iop'//trim(strindex), '-', 'backscattering-to-total-scattering ratio for IOP '//trim(strindex), minimum=0._rk)
+            end if
+            self%iops(i_iop)%b(:) = b_star_iop * (lambda_ref_iop / self%lambda)**eta_iop * 12.0107_rk
          end select
 
          ! Protect against negative coefficients caused by extrapolation beyond source spectrum boundaries.
@@ -561,7 +569,7 @@ contains
          par_J = sum(self%par_weights * spectrum)
          par_E = sum(self%par_E_weights * spectrum)
          _SET_DIAGNOSTIC_(self%id_par_J_scalar, par_J) ! Scalar Photosynthetically Active Radiation (W/m2)
-         _SET_DIAGNOSTIC_(self%id_par_E_scalar, par_E) ! Scalar Photosynthetically Active Radiation (umol/m2/s)
+         _SET_DIAGNOSTIC_(self%id_par_E_scalar, par_E) ! Scalar Photosynthetically Active photon flux (umol/m2/s)
 
          ! From centre to bottom of layer
          direct = direct * f_att_d
