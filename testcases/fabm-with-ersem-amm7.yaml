@@ -5,6 +5,7 @@ instances:
     model: spectral/spectral
     parameters:
       lambda_method: 1
+      compute_mean_wind: false
       n_iop: 6
       iop1_type: 1
       iop2_type: 2
