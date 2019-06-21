@@ -161,16 +161,16 @@ contains
             self%iops(i_iop)%a(:) = 2.98e-4_rk * exp(-0.014_rk * (self%lambda - 443_rk)) * 12.0107_rk
             self%iops(i_iop)%b(:) = 0
             self%iops(i_iop)%b_b = 0
-         case (9) ! Arbitrary carbon-specific absorption (and in the future, backscattering) spectra
+         case (9) ! Custom carbon-specific absorption and total scattering spectra
             ! NB 12.0107 converts from mg-1 to mmol-1
-            call self%get_parameter(a_star_iop, 'a_star_iop'//trim(strindex), 'm2/mg C', 'mass-specific absorption coefficient for IOP '//trim(strindex)//' at reference wavelength', minimum=0._rk, default=0._rk)
+            call self%get_parameter(a_star_iop, 'a_star_iop'//trim(strindex), 'm2/mg C', 'carbon-mass-specific absorption coefficient for IOP '//trim(strindex)//' at reference wavelength', minimum=0._rk, default=0._rk)
             if (a_star_iop /= 0._rk) then
                call self%get_parameter(lambda_ref_iop, 'lambda_a_iop'//trim(strindex), 'nm', 'reference wavelength for absorption by IOP '//trim(strindex))
                call self%get_parameter(S_iop, 'S_iop'//trim(strindex), '-', 'exponent of absorption spectrum for IOP '//trim(strindex), minimum=0._rk)
             end if
             self%iops(i_iop)%a(:) = a_star_iop * exp(-S_iop * (self%lambda - lambda_ref_iop)) * 12.0107_rk
 
-            call self%get_parameter(b_star_iop, 'b_star_iop'//trim(strindex), 'm2/mg C', 'mass-specific scattering coefficient for IOP '//trim(strindex)//' at reference wavelength', minimum=0._rk, default=0._rk)
+            call self%get_parameter(b_star_iop, 'b_star_iop'//trim(strindex), 'm2/mg C', 'carbon-mass-specific scattering coefficient for IOP '//trim(strindex)//' at reference wavelength', minimum=0._rk, default=0._rk)
             if (b_star_iop /= 0._rk) then
                call self%get_parameter(lambda_ref_iop, 'lambda_b_iop'//trim(strindex), 'nm', 'reference wavelength for scattering by IOP '//trim(strindex))
                call self%get_parameter(eta_iop, 'eta_iop'//trim(strindex), '-', 'exponent of scattering spectrum for IOP '//trim(strindex), minimum=0._rk)
