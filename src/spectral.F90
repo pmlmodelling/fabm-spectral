@@ -185,11 +185,11 @@ contains
 
          ! Link to concentration metric to allow us to convert *specific* absorption/scattering into actual absorption and scattering (in m-1)
          if (iop_type >=1 .and. iop_type <= 5) then
-            ! Phytoplankton: chlorophyll-specific absorpion and scattering
+            ! Phytoplankton: chlorophyll-specific absorption and scattering
             call self%register_dependency(self%iops(i_iop)%id_c, 'iop' // trim(strindex) // '_chl', 'mg Chl m-3', 'chlorophyll in IOP ' // trim(strindex))
             call self%request_coupling_to_model(self%iops(i_iop)%id_c, 'iop' // trim(strindex), type_bulk_standard_variable(name='total_chlorophyll'))
          else
-            ! POM/DOM/PIC: carbon-specific absorpion and scattering
+            ! POM/DOM/PIC: carbon-specific absorption and scattering
             call self%register_dependency(self%iops(i_iop)%id_c, 'iop' // trim(strindex) // '_c', 'mmol C m-3', 'carbon in IOP ' // trim(strindex))
             call self%request_coupling_to_model(self%iops(i_iop)%id_c, 'iop' // trim(strindex), standard_variables%total_carbon)
          end if
