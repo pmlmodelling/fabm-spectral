@@ -33,7 +33,7 @@ module fabm_spectral
       type (type_dependency_id) :: id_h
       integer :: nlambda
       type (type_horizontal_diagnostic_variable_id), dimension(:), allocatable :: id_surface_band_dir, id_surface_band_dif
-      type (type_diagnostic_variable_id), dimension(:), allocatable :: id_band_dir, id_band_dif
+      type (type_diagnostic_variable_id), dimension(:), allocatable :: id_band_dir, id_band_dif, id_a_band, id_b_band
       type (type_diagnostic_variable_id), dimension(:,:), allocatable :: id_a_iop
       real(rk), dimension(:), allocatable :: lambda, lambda_bounds, par_weights, par_E_weights, swr_weights, uv_weights, F, lambda_out
       real(rk), dimension(:), allocatable :: exter
@@ -328,6 +328,8 @@ contains
          allocate(self%id_band_dir(size(self%lambda_out)))
          allocate(self%id_band_dif(size(self%lambda_out)))
          allocate(self%id_a_iop(size(self%lambda_out), size(self%iops)))
+         allocate(self%id_a_band(size(self%lambda_out)))
+         allocate(self%id_b_band(size(self%lambda_out)))
          do l = 1, size(self%lambda_out)
             if (self%lambda_out(l) < 1000._rk) then
                write(strwavelength, '(f5.1)') self%lambda_out(l)
@@ -343,6 +345,8 @@ contains
                write(strindex2, '(i0)') i_iop
                call self%register_diagnostic_variable(self%id_a_iop(l, i_iop), 'a_iop' // trim(strindex2) // '_band' // trim(strindex), '1/m', 'absorption by IOP ' // trim(strindex2) // ' @ ' // trim(strwavelength) // ' nm', source=source_do_column)
             end do
+            call self%register_diagnostic_variable(self%id_a_band(l), 'a_band' // trim(strindex), 'm-1', 'total absorption excluding water @ ' // trim(strwavelength) // ' nm', source=source_do_column)
+            call self%register_diagnostic_variable(self%id_b_band(l), 'b_band' // trim(strindex), 'm-1', 'total scattering excluding water @ ' // trim(strwavelength) // ' nm', source=source_do_column)
          end do
       end if
    end subroutine initialize
@@ -544,6 +548,24 @@ contains
             b = b + c_iop * self%iops(i_iop)%b
             b_b = b_b + c_iop * self%iops(i_iop)%b_b * self%iops(i_iop)%b
          end do
+
+         ! Save spectral total absorption/scattering
+         select case (self%spectral_output)
+         case (1)
+            do l = 1, self%nlambda
+               _SET_DIAGNOSTIC_(self%id_a_band(l), a(l) - self%a_w(l))
+               _SET_DIAGNOSTIC_(self%id_b_band(l), b(l) - self%b_w(l))
+            end do
+         case (2)
+            call interp(self%nlambda, self%lambda, a - self%a_w, size(self%lambda_out), self%lambda_out, spectrum_out)
+            do l = 1, size(self%lambda_out)
+               _SET_DIAGNOSTIC_(self%id_a_band(l), spectrum_out(l))
+            end do
+            call interp(self%nlambda, self%lambda, b - self%b_w, size(self%lambda_out), self%lambda_out, spectrum_out)
+            do l = 1, size(self%lambda_out)
+               _SET_DIAGNOSTIC_(self%id_b_band(l), spectrum_out(l))
+            end do
+         end select
 
          ! Transmissivity of direct/diffuse attentuation and conversion from direct to diffuse - for one half of the layer
          _GET_(self%id_h, h)
