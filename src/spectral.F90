@@ -24,7 +24,7 @@ module fabm_spectral
    end type
 
    type,extends(type_particle_model), public :: type_spectral
-      type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_par_E_scalar, id_par_J_scalar, id_swr_abs, id_secchi
+      type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_par_E_scalar, id_par_J_scalar, id_par_E_dif, id_swr_abs, id_secchi
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf, id_mean_wind_out, id_wind_out, id_zen
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf_w, id_par_sf_w, id_uv_sf_w, id_par_E_sf_w
       type (type_horizontal_diagnostic_variable_id) :: id_alpha_a, id_beta_a, id_omega_a, id_F_a
@@ -257,6 +257,7 @@ contains
       call self%register_diagnostic_variable(self%id_par_J_scalar,'par_J_scalar','W/m^2', 'scalar downwelling photosynthetic radiative flux', standard_variable=standard_variables%downwelling_photosynthetic_radiative_flux, source=source_do_column)
       call self%register_diagnostic_variable(self%id_par_E_scalar,'par_E_scalar','umol/m^2/s', 'scalar downwelling photosynthetic photon flux', source=source_do_column)
       call self%register_diagnostic_variable(self%id_swr_abs, 'swr_abs', 'W/m^2',      'absorption of shortwave energy in layer', standard_variable=standard_variables%net_rate_of_absorption_of_shortwave_energy_in_layer, source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_E_dif, 'par_E_dif', 'W/m^2',      'diffusive downwelling photosynthetic photon flux', source=source_do_column)
       !call self%register_diagnostic_variable(self%id_secchi,  'secchi',  'm',          'Secchi depth (1.7/Kd 490)', standard_variable=standard_variables%secchi_depth, source=source_do_column)
 
       ! Interpolate absorption and scattering spectra to user wavelength grid
@@ -563,8 +564,9 @@ contains
          _SET_DIAGNOSTIC_(self%id_par_E, par_E) ! Photosynthetically Active Radiation (umol/m2/s)
          _SET_DIAGNOSTIC_(self%id_swr,  swr_J)  ! Total shortwave radiation (W/m2) [up to 4000 nm]
          _SET_DIAGNOSTIC_(self%id_uv, uv_J)     ! UV (W/m2)
+         _SET_DIAGNOSTIC_(self%id_par_E_dif, sum(self%par_E_weights * diffuse)) ! Diffuse Photosynthetically Active photon flux (umol/m2/s)
 
-         ! Compute PAR on horizontal plane for comparison with sensor output
+         ! Compute scalar PAR as experienced by phytoplankton
          spectrum = direct / costheta_r + diffuse / mcosthetas
          par_J = sum(self%par_weights * spectrum)
          par_E = sum(self%par_E_weights * spectrum)
