@@ -33,7 +33,7 @@ module fabm_spectral
       type (type_dependency_id) :: id_h
       integer :: nlambda
       type (type_horizontal_diagnostic_variable_id), dimension(:), allocatable :: id_surface_band_dir, id_surface_band_dif
-      type (type_diagnostic_variable_id), dimension(:), allocatable :: id_band_dir, id_band_dif, id_a_band, id_b_band
+      type (type_diagnostic_variable_id), dimension(:), allocatable :: id_band_dir, id_band_dif, id_a_band, id_b_band, id_Kd
       type (type_diagnostic_variable_id), dimension(:,:), allocatable :: id_a_iop
       real(rk), dimension(:), allocatable :: lambda, lambda_bounds, par_weights, par_E_weights, swr_weights, uv_weights, F, lambda_out
       real(rk), dimension(:), allocatable :: exter
@@ -42,6 +42,7 @@ module fabm_spectral
       type (type_iop), allocatable :: iops(:)
       integer :: l490_l
       integer :: spectral_output
+      logical :: save_Kd
    contains
       procedure :: initialize
       procedure :: get_light
@@ -321,6 +322,7 @@ contains
             call self%get_parameter(self%lambda_out(l), 'lambda' // trim(strindex) // '_out', '', 'output wavelength ' // trim(strindex))
          end do
       end select
+      call self%get_parameter(self%save_Kd, 'save_Kd', '', 'compute attenuation', default=.false.)
 
       if (allocated(self%lambda_out)) then
          allocate(self%id_surface_band_dir(size(self%lambda_out)))
@@ -330,6 +332,7 @@ contains
          allocate(self%id_a_iop(size(self%lambda_out), size(self%iops)))
          allocate(self%id_a_band(size(self%lambda_out)))
          allocate(self%id_b_band(size(self%lambda_out)))
+         if (self%save_Kd) allocate(self%id_Kd(size(self%lambda_out)))
          do l = 1, size(self%lambda_out)
             if (self%lambda_out(l) < 1000._rk) then
                write(strwavelength, '(f5.1)') self%lambda_out(l)
@@ -341,6 +344,7 @@ contains
             call self%register_diagnostic_variable(self%id_surface_band_dif(l), 'dif_sf_band' // trim(strindex), 'W/m2/nm', 'downward diffuse irradiance in air @ ' // trim(strwavelength) // ' nm', source=source_do_column)
             !call self%register_diagnostic_variable(self%id_band_dir(l), 'dir_band' // trim(strindex), 'W/m2/nm', 'direct irradiance @ ' // trim(strwavelength) // ' nm', source=source_do_column)
             !call self%register_diagnostic_variable(self%id_band_dif(l), 'dif_band' // trim(strindex), 'W/m2/nm', 'diffuse irradiance @ ' // trim(strwavelength) // ' nm', source=source_do_column)
+            if (self%save_Kd) call self%register_diagnostic_variable(self%id_Kd(l), 'Kd_band' // trim(strindex), 'm-1', 'attenuation @ ' // trim(strwavelength) // ' nm', source=source_do_column)
             do i_iop = 1, size(self%iops)
                write(strindex2, '(i0)') i_iop
                call self%register_diagnostic_variable(self%id_a_iop(l, i_iop), 'a_iop' // trim(strindex2) // '_band' // trim(strindex), '1/m', 'absorption by IOP ' // trim(strindex2) // ' @ ' // trim(strwavelength) // ' nm', source=source_do_column)
@@ -367,7 +371,7 @@ contains
       integer :: l
       real(rk) :: M, M_prime, M_oz
       real(rk) :: O3
-      real(rk), dimension(self%nlambda) :: direct, diffuse, spectrum  ! Spectra at top of the water column (with refraction and reflection accounted for)
+      real(rk), dimension(self%nlambda) :: direct, diffuse, spectrum, spectrum_top, Kd  ! Spectra at top of the water column (with refraction and reflection accounted for)
       real(rk) :: par_J, swr_J, uv_J, par_E, F_a, omega_a
       real(rk), dimension(self%nlambda) :: tau_a, T_a, T_oz, T_w, T_u, T_r, T_aa, T_as
       real(rk), dimension(self%nlambda) :: T_g, T_dclr, T_sclr, T_dcld, T_scld
@@ -525,6 +529,7 @@ contains
       _VERTICAL_LOOP_BEGIN_
          ! Save downwelling shortwave flux at top of the layer
          swr_top = swr_J
+         spectrum_top = spectrum
 
          ! Compute absorption, total scattering and backscattering in current layer from IOPs
          a = self%a_w
@@ -548,24 +553,6 @@ contains
             b = b + c_iop * self%iops(i_iop)%b
             b_b = b_b + c_iop * self%iops(i_iop)%b_b * self%iops(i_iop)%b
          end do
-
-         ! Save spectral total absorption/scattering
-         select case (self%spectral_output)
-         case (1)
-            do l = 1, self%nlambda
-               _SET_DIAGNOSTIC_(self%id_a_band(l), a(l) - self%a_w(l))
-               _SET_DIAGNOSTIC_(self%id_b_band(l), b(l) - self%b_w(l))
-            end do
-         case (2)
-            call interp(self%nlambda, self%lambda, a - self%a_w, size(self%lambda_out), self%lambda_out, spectrum_out)
-            do l = 1, size(self%lambda_out)
-               _SET_DIAGNOSTIC_(self%id_a_band(l), spectrum_out(l))
-            end do
-            call interp(self%nlambda, self%lambda, b - self%b_w, size(self%lambda_out), self%lambda_out, spectrum_out)
-            do l = 1, size(self%lambda_out)
-               _SET_DIAGNOSTIC_(self%id_b_band(l), spectrum_out(l))
-            end do
-         end select
 
          ! Transmissivity of direct/diffuse attentuation and conversion from direct to diffuse - for one half of the layer
          _GET_(self%id_h, h)
@@ -599,6 +586,32 @@ contains
          direct = direct * f_att_d
          diffuse = diffuse * f_att_s + direct * f_prod_s
          spectrum = direct + diffuse
+
+         ! Save spectrally resolved outputs
+         if (self%save_Kd) Kd = (log(spectrum_top) - log(spectrum)) / h
+         select case (self%spectral_output)
+         case (1)
+            do l = 1, self%nlambda
+               _SET_DIAGNOSTIC_(self%id_a_band(l), a(l) - self%a_w(l))
+               _SET_DIAGNOSTIC_(self%id_b_band(l), b(l) - self%b_w(l))
+                if (self%save_Kd) _SET_DIAGNOSTIC_(self%id_Kd(l), Kd(l))
+            end do
+         case (2)
+            call interp(self%nlambda, self%lambda, a - self%a_w, size(self%lambda_out), self%lambda_out, spectrum_out)
+            do l = 1, size(self%lambda_out)
+               _SET_DIAGNOSTIC_(self%id_a_band(l), spectrum_out(l))
+            end do
+            call interp(self%nlambda, self%lambda, b - self%b_w, size(self%lambda_out), self%lambda_out, spectrum_out)
+            do l = 1, size(self%lambda_out)
+               _SET_DIAGNOSTIC_(self%id_b_band(l), spectrum_out(l))
+            end do
+            if (self%save_Kd) then
+               call interp(self%nlambda, self%lambda, Kd, size(self%lambda_out), self%lambda_out, spectrum_out)
+               do l = 1, size(self%lambda_out)
+                  _SET_DIAGNOSTIC_(self%id_Kd(l), spectrum_out(l))
+               end do
+            end if
+         end select
 
          ! Compute remaining downwelling shortwave flux and from that, absorption [heating]
          swr_J = sum(self%swr_weights * spectrum)
