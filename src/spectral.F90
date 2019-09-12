@@ -176,8 +176,11 @@ contains
                call self%get_parameter(lambda_ref_iop, 'lambda_b_iop'//trim(strindex), 'nm', 'reference wavelength for scattering by IOP '//trim(strindex))
                call self%get_parameter(eta_iop, 'eta_iop'//trim(strindex), '-', 'exponent of scattering spectrum for IOP '//trim(strindex), minimum=0._rk)
                call self%get_parameter(self%iops(i_iop)%b_b, 'b_b_iop'//trim(strindex), '-', 'backscattering-to-total-scattering ratio for IOP '//trim(strindex), minimum=0._rk)
+               self%iops(i_iop)%b(:) = b_star_iop * (lambda_ref_iop / self%lambda)**eta_iop * 12.0107_rk
+            else
+               self%iops(i_iop)%b(:) = 0
+               self%iops(i_iop)%b_b = 0
             end if
-            self%iops(i_iop)%b(:) = b_star_iop * (lambda_ref_iop / self%lambda)**eta_iop * 12.0107_rk
          end select
 
          ! Protect against negative coefficients caused by extrapolation beyond source spectrum boundaries.
@@ -371,7 +374,7 @@ contains
       integer :: l
       real(rk) :: M, M_prime, M_oz
       real(rk) :: O3
-      real(rk), dimension(self%nlambda) :: direct, diffuse, spectrum, spectrum_top, Kd  ! Spectra at top of the water column (with refraction and reflection accounted for)
+      real(rk), dimension(self%nlambda) :: direct, diffuse, spectrum, Kd  ! Spectra at top of the water column (with refraction and reflection accounted for)
       real(rk) :: par_J, swr_J, uv_J, par_E, F_a, omega_a
       real(rk), dimension(self%nlambda) :: tau_a, T_a, T_oz, T_w, T_u, T_r, T_aa, T_as
       real(rk), dimension(self%nlambda) :: T_g, T_dclr, T_sclr, T_dcld, T_scld
@@ -529,7 +532,6 @@ contains
       _VERTICAL_LOOP_BEGIN_
          ! Save downwelling shortwave flux at top of the layer
          swr_top = swr_J
-         spectrum_top = spectrum
 
          ! Compute absorption, total scattering and backscattering in current layer from IOPs
          a = self%a_w
@@ -560,6 +562,18 @@ contains
          f_att_s = exp(-0.5_rk * (a + r_s * b_b) * h / mcosthetas) ! Gregg & Rousseau 2016 Eq 9
          f_prod_s = exp(-0.5_rk * a * h / costheta_r) - f_att_d    ! Gregg & Rousseau 2016 Eq 14 but not accounting for backscattered fraction
 
+         if (self%save_Kd) then
+            do l = 1, self%nlambda
+               if (direct(l) > 0) then
+                  ! Direct and diffuse stream
+                  Kd(l) = 2 * (log(1._rk + diffuse(l) / direct(l)) - log(f_att_d(l) + f_prod_s(l) + diffuse(l) / direct(l) * f_att_s(l))) / h
+               else
+                  ! Only diffuse stream
+                  Kd(l) = - 2 * log(f_att_s(l)) / h
+               end if
+            end do
+         end if
+
          ! From top to centre of layer
          direct = direct * f_att_d
          diffuse = diffuse * f_att_s + direct * f_prod_s
@@ -588,7 +602,6 @@ contains
          spectrum = direct + diffuse
 
          ! Save spectrally resolved outputs
-         if (self%save_Kd) Kd = (log(spectrum_top) - log(spectrum)) / h
          select case (self%spectral_output)
          case (1)
             do l = 1, self%nlambda
