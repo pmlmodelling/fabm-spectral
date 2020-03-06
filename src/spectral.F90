@@ -529,7 +529,7 @@ contains
       _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_sf_w,  swr_J) ! Total shortwave radiation (W/m2) [up to 4000 nm]
       _SET_HORIZONTAL_DIAGNOSTIC_(self%id_uv_sf_w, uv_J)    ! UV (W/m2)
 
-      _VERTICAL_LOOP_BEGIN_
+      _DOWNWARD_LOOP_BEGIN_
          ! Save downwelling shortwave flux at top of the layer
          swr_top = swr_J
 
@@ -631,6 +631,11 @@ contains
          _SET_DIAGNOSTIC_(self%id_swr_abs, swr_top - swr_J)
          !_SET_DIAGNOSTIC_(self%id_secchi, 0._rk)
       _VERTICAL_LOOP_END_
+
+      ! Put remaining shortwave in bottom layer
+      ! (assumes all light is absorbed by sediment and injected into water column)
+      _MOVE_TO_BOTTOM_
+      _SET_DIAGNOSTIC_(self%id_swr_abs, swr_J)
    end subroutine get_light
 
    subroutine calculate_integral_weights(xl, xr, n, x, w)
