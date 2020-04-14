@@ -30,9 +30,9 @@ contains
       call self%register_dependency(self%id_airpres, standard_variables%surface_air_pressure)
 
       call self%register_diagnostic_variable(self%id_relhum, 'relhum', '-', 'relative_humidity', &
-        standard_variable=type_horizontal_standard_variable('relative_humidity', '-'))
+        standard_variable=type_horizontal_standard_variable('relative_humidity', '-'), source=source_do_surface)
    end subroutine
-   
+
    subroutine do_surface(self, _ARGUMENTS_DO_SURFACE_)
       class (type_relhum), intent(in) :: self
       _DECLARE_ARGUMENTS_DO_SURFACE_
