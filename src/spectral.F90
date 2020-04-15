@@ -914,7 +914,10 @@ contains
       ! Air density (g/m3)
       real(rk), parameter :: rho_a = 1.2e3_rk
 
-      ! Refractive index of seawater, Gregg and Carder 1990 p1667 (Kirk 2011 uses 1.33, described as "accurate enough")
+      ! Refractive index of seawater, Gregg and Carder 1990 p1667
+      ! Note: pure water has an index of about 1.33 (e.g., Kirk 2011),
+      ! but in seawater it is higher (1.34 - 1.36) and dependent on temperature and salinity
+      ! (e.g., https://doi.org/10.1016/0011-7471(71)90050-7)
       real(rk), parameter :: n_w = 1.341_rk
 
       real(rk) :: C_D, tau, rho_f_W, rho_f(nlambda)
