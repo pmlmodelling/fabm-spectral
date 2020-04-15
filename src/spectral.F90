@@ -38,7 +38,7 @@ module fabm_spectral
       real(rk), dimension(:), allocatable :: lambda, lambda_bounds, par_weights, par_E_weights, swr_weights, uv_weights, F, lambda_out
       real(rk), dimension(:), allocatable :: exter
       real(rk), dimension(:), allocatable :: a_o, a_u, a_v, tau_r
-      real(rk), dimension(:), allocatable :: a_w, b_w
+      real(rk), dimension(:), allocatable :: a_w, b_w, a_w_out, b_w_out
       type (type_iop), allocatable :: iops(:)
       integer :: l490_l
       integer :: spectral_output
@@ -324,6 +324,9 @@ contains
             write(strindex, '(i0)') l
             call self%get_parameter(self%lambda_out(l), 'lambda' // trim(strindex) // '_out', '', 'output wavelength ' // trim(strindex))
          end do
+         allocate(self%a_w_out(nlambda_out), self%b_w_out(nlambda_out))
+         call interp(nlambda_w, lambda_w, a_w, nlambda_out, self%lambda_out, self%a_w_out)
+         call interp(nlambda_w, lambda_w, b_w, nlambda_out, self%lambda_out, self%b_w_out)
       end select
       call self%get_parameter(self%save_Kd, 'save_Kd', '', 'compute attenuation', default=.false.)
 
@@ -384,7 +387,7 @@ contains
       real(rk), dimension(self%nlambda) :: f_att_d, f_att_s, f_prod_s
       real(rk), allocatable :: spectrum_out(:)
       integer :: i_iop
-      real(rk) :: c_iop, h, swr_top, costheta_r
+      real(rk) :: c_iop, h, swr_top, costheta_r, dir_frac
 
       if (self%spectral_output == 2) allocate(spectrum_out(size(self%lambda_out)))
 
@@ -564,12 +567,14 @@ contains
 
          if (self%save_Kd) then
             do l = 1, self%nlambda
-               if (direct(l) > 0) then
+               !Kd(l) = 2 * (log(direct(l) + diffuse(l)) - log(direct(l) * (f_att_d(l) + f_prod_s(l)) + diffuse(l) * f_att_s(l))) / h
+               if (direct(l) + diffuse(l) > 0) then
                   ! Direct and diffuse stream
-                  Kd(l) = 2 * (log(1._rk + diffuse(l) / direct(l)) - log(f_att_d(l) + f_prod_s(l) + diffuse(l) / direct(l) * f_att_s(l))) / h
+                  dir_frac = direct(l) / (direct(l) + diffuse(l))
+                  Kd(l) = - 2 *log(dir_frac * (f_att_d(l) + f_prod_s(l)) + (1.0_rk - dir_frac) * f_att_s(l)) / h
                else
                   ! Only diffuse stream
-                  Kd(l) = - 2 * log(f_att_s(l)) / h
+                  Kd(l) = (a(l) + r_s * b_b(l)) / mcosthetas
                end if
             end do
          end if
@@ -610,13 +615,13 @@ contains
                 if (self%save_Kd) _SET_DIAGNOSTIC_(self%id_Kd(l), Kd(l))
             end do
          case (2)
-            call interp(self%nlambda, self%lambda, a - self%a_w, size(self%lambda_out), self%lambda_out, spectrum_out)
+            call interp(self%nlambda, self%lambda, a, size(self%lambda_out), self%lambda_out, spectrum_out)
             do l = 1, size(self%lambda_out)
-               _SET_DIAGNOSTIC_(self%id_a_band(l), spectrum_out(l))
+               _SET_DIAGNOSTIC_(self%id_a_band(l), spectrum_out(l) - self%a_w_out(l))
             end do
-            call interp(self%nlambda, self%lambda, b - self%b_w, size(self%lambda_out), self%lambda_out, spectrum_out)
+            call interp(self%nlambda, self%lambda, b, size(self%lambda_out), self%lambda_out, spectrum_out)
             do l = 1, size(self%lambda_out)
-               _SET_DIAGNOSTIC_(self%id_b_band(l), spectrum_out(l))
+               _SET_DIAGNOSTIC_(self%id_b_band(l), spectrum_out(l) - self%b_w_out(l))
             end do
             if (self%save_Kd) then
                call interp(self%nlambda, self%lambda, Kd, size(self%lambda_out), self%lambda_out, spectrum_out)
