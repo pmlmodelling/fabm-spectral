@@ -3,7 +3,7 @@ instances:
     model: spectral/spectral
     parameters:
       lambda_method: 1
-      save_spectra: true
+      spectral_output: 1
       #nlambda: 50
       #lambda_min: 400
       #lambda_max: 700
