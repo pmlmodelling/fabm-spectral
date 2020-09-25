@@ -168,8 +168,10 @@ contains
             if (a_star_iop /= 0._rk) then
                call self%get_parameter(lambda_ref_iop, 'lambda_a_iop'//trim(strindex), 'nm', 'reference wavelength for absorption by IOP '//trim(strindex))
                call self%get_parameter(S_iop, 'S_iop'//trim(strindex), '-', 'exponent of absorption spectrum for IOP '//trim(strindex), minimum=0._rk)
+               self%iops(i_iop)%a(:) = a_star_iop * exp(-S_iop * (self%lambda - lambda_ref_iop)) * 12.0107_rk
+            else
+               self%iops(i_iop)%a(:) = 0
             end if
-            self%iops(i_iop)%a(:) = a_star_iop * exp(-S_iop * (self%lambda - lambda_ref_iop)) * 12.0107_rk
 
             call self%get_parameter(b_star_iop, 'b_star_iop'//trim(strindex), 'm2/mg C', 'carbon-mass-specific scattering coefficient for IOP '//trim(strindex)//' at reference wavelength', minimum=0._rk, default=0._rk)
             if (b_star_iop /= 0._rk) then
@@ -565,7 +567,7 @@ contains
          f_att_s = exp(-0.5_rk * (a + r_s * b_b) * h / mcosthetas) ! Gregg & Rousseau 2016 Eq 9
          f_prod_s = exp(-0.5_rk * a * h / costheta_r) - f_att_d    ! Gregg & Rousseau 2016 Eq 14 but not accounting for backscattered fraction
 
-         if (self%save_Kd) then
+         if (self%save_Kd .and. self%spectral_output /= 0) then
             do l = 1, self%nlambda
                !Kd(l) = 2 * (log(direct(l) + diffuse(l)) - log(direct(l) * (f_att_d(l) + f_prod_s(l)) + diffuse(l) * f_att_s(l))) / h
                if (direct(l) + diffuse(l) > 0) then
