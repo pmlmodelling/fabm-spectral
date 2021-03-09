@@ -2,35 +2,35 @@ instances:
   light:
     model: spectral/spectral
     parameters:
-      lambda_method: 1
-      spectral_output: 1
-      #nlambda: 50
-      #lambda_min: 400
-      #lambda_max: 700
+      lambda_method: 1                                               # choice of wavebands (0: custom range, 1: OASIM), default = 1
+      #nlambda: 50                                                    # number of wavebands
+      #lambda_min: 400.0                                              # minimum wavelength (nm)
+      #lambda_max: 700.0                                              # maximum wavelength (nm)
+      spectral_output: 1                                             # spectral output (0: none, 1: full, 2: selected wavelengths), default = 0
   relhum:
     model: spectral/relhum
   #lwp:
   #  model: horizontal_constant
   #  parameters:
-  #    standard_name: atmosphere_mass_content_of_cloud_liquid_water
-  #    value: 0.1
+  #    standard_name: atmosphere_mass_content_of_cloud_liquid_water   # standard name, default = 
+  #    value: 0.1                                                     # value
   #hum:
   #  model: horizontal_constant
   #  parameters:
-  #    standard_name: relative_humidity
-  #    value: 1
+  #    standard_name: relative_humidity                               # standard name, default = 
+  #    value: 1.0                                                     # value
   #vap:
   #  model: horizontal_constant
   #  parameters:
-  #    standard_name: atmosphere_mass_content_of_water_vapor
-  #    value: 20.
+  #    standard_name: atmosphere_mass_content_of_water_vapor          # standard name, default = 
+  #    value: 20.0                                                    # value
   viz:
     model: horizontal_constant
     parameters:
-      standard_name: visibility_in_air
-      value: 25000
+      standard_name: visibility_in_air                               # standard name, default = 
+      value: 25000.0                                                 # value
   aero:
     model: horizontal_constant
     parameters:
-      standard_name: aerosol_air_mass_type
-      value: 10
+      standard_name: aerosol_air_mass_type                           # standard name, default = 
+      value: 10.0                                                    # value

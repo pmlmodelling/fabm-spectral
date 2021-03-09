@@ -4,26 +4,26 @@ instances:
   light:
     model: spectral/spectral
     parameters:
-      lambda_method: 1
-      n_iop: 10
-      iop1_type: 1
-      iop2_type: 2
-      iop3_type: 3
-      iop4_type: 5
-      iop5_type: 6
-      iop6_type: 6
-      iop7_type: 6
-      iop8_type: 8
-      iop9_type: 8
-      iop10_type: 8
-      spectral_output: 2
-      nlambda_out: 6
-      lambda1_out: 412
-      lambda2_out: 443
-      lambda3_out: 490
-      lambda4_out: 510
-      lambda5_out: 555
-      lambda6_out: 665
+      lambda_method: 1                                     # choice of wavebands (0: custom range, 1: OASIM), default = 1
+      n_iop: 10                                            # number of inherent optical properties (IOPs), default = 0
+      iop1_type: 1                                         # type of IOP 1 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
+      iop2_type: 2                                         # type of IOP 2 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
+      iop3_type: 3                                         # type of IOP 3 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
+      iop4_type: 5                                         # type of IOP 4 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
+      iop5_type: 6                                         # type of IOP 5 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
+      iop6_type: 6                                         # type of IOP 6 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
+      iop7_type: 6                                         # type of IOP 7 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
+      iop8_type: 8                                         # type of IOP 8 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
+      iop9_type: 8                                         # type of IOP 9 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
+      iop10_type: 8                                        # type of IOP 10 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
+      spectral_output: 2                                   # spectral output (0: none, 1: full, 2: selected wavelengths), default = 0
+      nlambda_out: 6                                       # number of wavebands for spectral output
+      lambda1_out: 412.0                                   # output wavelength 1
+      lambda2_out: 443.0                                   # output wavelength 2
+      lambda3_out: 490.0                                   # output wavelength 3
+      lambda4_out: 510.0                                   # output wavelength 4
+      lambda5_out: 555.0                                   # output wavelength 5
+      lambda6_out: 665.0                                   # output wavelength 6
     coupling:
       iop1: P1
       iop2: P2
@@ -40,13 +40,13 @@ instances:
   viz:
     model: horizontal_constant
     parameters:
-      standard_name: visibility_in_air
-      value: 25000
+      standard_name: visibility_in_air                     # standard name, default = 
+      value: 25000.0                                       # value
   aero:
     model: horizontal_constant
     parameters:
-      standard_name: aerosol_air_mass_type
-      value: 10
+      standard_name: aerosol_air_mass_type                 # standard name, default = 
+      value: 10.0                                          # value
   N1:
     long_name: phosphate
     model: ersem/pelagic_base
@@ -83,7 +83,7 @@ instances:
     long_name: oxygen
     model: ersem/oxygen
     parameters:
-      ISWO2: 2                                             # saturation formulation (1: legacy ERSEM, 2: Weiss 1970)
+      iswO2: 2                                             # saturation formulation (1: legacy ERSEM, 2: Weiss 1970, 3: Nightingale et al. 2000, 4: Wanninkhof 2014)
     initialization:
       o: 300.0                                             # oxygen (mmol O_2/m^3)
   O3:
@@ -91,7 +91,7 @@ instances:
     model: ersem/carbonate
     parameters:
       iswCO2: 1                                            # carbonate system diagnostics (0: off, 1: on), default = 1
-      iswASFLUX: 1                                         # air-sea CO2 exchange (0: none, 1: Nightingale and Liss, 2: Wanninkhof 1992 without chemical enhancement, 3: Wanninkhof 1992 with chemical enhancement, 4: Wanninkhof 1999), default = 1
+      iswASFLUX: 1                                         # air-sea CO2 exchange (0: none, 1: Nightingale et al. 2000, 2: Wanninkhof 1992 without chemical enhancement, 3: Wanninkhof 1992 with chemical enhancement, 4: Wanninkhof and McGillis 1999, 5: Wanninkhof 1992 switching to Wanninkhof and McGillis 1999, 6: Wan, default = 6
       iswtalk: 2                                           # alkalinity formulation (1-4: from salinity and temperature, 5: dynamic alkalinity), default = 5
     initialization:
       c: 2130.0                                            # total dissolved inorganic carbon (mmol C/m^3)
@@ -130,7 +130,7 @@ instances:
       iopABS: 1e-05                                        # specific shortwave absorption (m^2/mg C), default = 0.0
       iopBBS: 1.6e-05                                      # specific shortwave backscatter (m^2/mg C), default = 0.0
       rm: 1.0                                              # sinking velocity (m/d), default = 0.0
-      ndeposition: 2                                       # number of target pools for sedimentation, default = 0
+      ndeposition: 2                                       # number of target pools for sedimentation, default = 1
       qxc2: 0.1                                            # fraction of carbon sinking into deposition target 2 (-)
       qxn2: 0.1                                            # fraction of nitrogen sinking into deposition target 2 (-)
       qxp2: 0.06                                           # fraction of phosphorus sinking into deposition target 2 (-)
@@ -150,7 +150,7 @@ instances:
       iopABS: 1e-05                                        # specific shortwave absorption (m^2/mg C), default = 0.0
       iopBBS: 1.6e-05                                      # specific shortwave backscatter (m^2/mg C), default = 0.0
       rm: 5.0                                              # sinking velocity (m/d), default = 0.0
-      ndeposition: 2                                       # number of target pools for sedimentation, default = 0
+      ndeposition: 2                                       # number of target pools for sedimentation, default = 1
       qxc2: 0.1                                            # fraction of carbon sinking into deposition target 2 (-)
       qxn2: 0.1                                            # fraction of nitrogen sinking into deposition target 2 (-)
       qxp2: 0.06                                           # fraction of phosphorus sinking into deposition target 2 (-)
@@ -172,7 +172,7 @@ instances:
       iopABS: 1e-05                                        # specific shortwave absorption (m^2/mg C), default = 0.0
       iopBBS: 1.6e-05                                      # specific shortwave backscatter (m^2/mg C), default = 0.0
       rm: 10.0                                             # sinking velocity (m/d), default = 0.0
-      ndeposition: 2                                       # number of target pools for sedimentation, default = 0
+      ndeposition: 2                                       # number of target pools for sedimentation, default = 1
       qxc2: 0.1                                            # fraction of carbon sinking into deposition target 2 (-)
       qxn2: 0.1                                            # fraction of nitrogen sinking into deposition target 2 (-)
       qxp2: 0.06                                           # fraction of phosphorus sinking into deposition target 2 (-)
@@ -200,8 +200,8 @@ instances:
     model: ersem/benthic_column_particulate_matter
     parameters:
       composition: cnpsf                                   # elemental composition
-      resuspension: true                                   # enable resuspension, default = false
       c0: 0.001                                            # background carbon concentration (mg C/m^2), default = 0.0
+      resuspension: true                                   # enable resuspension, default = false
     initialization:
       c: 3052.0                                            # carbon (mg C/m^2)
       n: 3.5                                               # nitrogen (mmol N/m^2)
@@ -734,7 +734,7 @@ instances:
     model: ersem/benthic_base
     parameters:
       composition: c                                       # elemental composition
-      remin: 0.05                                          # remineralisation rate (1/d), default = 0.0
+      remin: 0.05                                          # remineralisation rate at 10 degrees Celsius (1/d), default = 0.0
       c0: 1e-05                                            # background carbon concentration (mg C/m^2), default = 0.0
     initialization:
       c: 0.05                                              # carbon (mg C/m^2)
@@ -838,7 +838,7 @@ instances:
       composition: s                                       # elemental composition
       minimum_depth: 0.0                                   # minimum depth (m), default = 0.0
       variable_maximum_depth: true                         # maximum depth is variable, default = false
-      remin: 0.007                                         # remineralization rate (1/d), default = 0.0
+      remin: 0.007                                         # remineralization rate at 10 degrees Celsius (1/d), default = 0.0
     coupling:
       Q: Q6
       s_remin_target: K5/per_layer/s1
@@ -850,7 +850,7 @@ instances:
       composition: s                                       # elemental composition
       variable_minimum_depth: true                         # minimum depth is variable, default = false
       maximum_depth: 0.3                                   # maximum depth (m), default = 0.0
-      remin: 0.007                                         # remineralization rate (1/d), default = 0.0
+      remin: 0.007                                         # remineralization rate at 10 degrees Celsius (1/d), default = 0.0
       source_depth_distribution: 2                         # vertical distribution of changes (1: constant absolute rate, 2: constant relative rate, 3: constant carbon-based relative rate), default = 1
     coupling:
       Q: Q6
@@ -867,7 +867,7 @@ instances:
       xno3: 2.0                                            # oxygen consumed per nitrate produced (mol O_2/mol N)
       pammon: 0.5                                          # fraction of oxygen demand fulfilled by denitrification under anaerobic conditions (-)
       pdenit: 0.05                                         # fraction of denitrification producing dinitrogen gas (remainder produces ammonium) (-)
-      xn2: 1.25                                            # oxygen produced per N2 produced (-)
+      xn2: 1.25                                            # oxygen demand fulfilled by reduction of nitrate to dinitrogen gas (mol O_2/mol N)
       hM3G4: 1.0                                           # Michaelis-Menten constant for nitrate limitation of denitrification (mmol N/m^3)
     coupling:
       K3n: K3/per_layer/n1                                 # benthic nitrate in 1st layer (mmol N/m^2)

@@ -122,7 +122,7 @@ contains
          allocate(self%iops(i_iop)%a(self%nlambda))
          allocate(self%iops(i_iop)%b(self%nlambda))
          write(strindex, '(i0)') i_iop
-         call self%get_parameter(iop_type, 'iop'//trim(strindex)//'_type', '', 'type of IOP '//trim(strindex), minimum=1, maximum=9)
+         call self%get_parameter(iop_type, 'iop'//trim(strindex)//'_type', '', 'type of IOP '//trim(strindex)//' (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)', minimum=1, maximum=9)
          select case (iop_type)
          case (1) ! diatoms
             call interp(size(lambda_diatoms), lambda_diatoms, a_diatoms, self%nlambda, self%lambda, self%iops(i_iop)%a)
