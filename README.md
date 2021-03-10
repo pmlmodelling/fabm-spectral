@@ -16,9 +16,9 @@ NB the double quotes are _required_ to prevent your shell (e.g., bash) from inte
 
 This code comes with several test cases in the `testcases` directory. Most of these combine the spectral module with the [ERSEM](https://ersem.com) ecosystem model.
 
-## History
+## Implementation
 
-This codebase was developed over time based upon the work of [Bird (1984)](https://doi.org/10.1016/0038-092X(84)90260-3), [Bird & Riordan (1986)](https://doi.org/10.1175/1520-0450(1986)025<0087:SSSMFD>2.0.CO;2) and [Gregg & Carder (1990)](https:/doi.org/10.4319/lo.1990.35.8.1657). The current implementation is based upon:
+An early version of this codebase was developed in 2013 based upon the work of [Bird (1984)](https://doi.org/10.1016/0038-092X(84)90260-3), [Bird & Riordan (1986)](https://doi.org/10.1175/1520-0450(1986)025<0087:SSSMFD>2.0.CO;2) and [Gregg & Carder (1990)](https:/doi.org/10.4319/lo.1990.35.8.1657). The implementation was completely revised in 2019-2021 and is now based on:
 
 * Gregg, W. W., & Casey, N. W. (2009). Skill assessment of a spectral ocean-atmosphere radiative model. Journal of Marine Systems, 76(1–2), 49–63. doi: [10.1016/j.jmarsys.2008.05.007](https://doi.org/10.1016/j.jmarsys.2008.05.007).
 * Gregg, W. W., & Rousseaux, C. S. (2016). Directional and Spectral Irradiance in Ocean Models: Effects on Simulated Global Phytoplankton, Nutrients, and Primary Production. Frontiers in Marine Science, 3. doi: [10.3389/fmars.2016.00240](https://doi.org/10.3389/fmars.2016.00240).
