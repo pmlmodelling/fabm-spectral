@@ -24,7 +24,7 @@ An early version of this codebase was developed in 2013 based upon the work of [
 * Gregg, W. W., & Rousseaux, C. S. (2016). Directional and Spectral Irradiance in Ocean Models: Effects on Simulated Global Phytoplankton, Nutrients, and Primary Production. Frontiers in Marine Science, 3. doi: [10.3389/fmars.2016.00240](https://doi.org/10.3389/fmars.2016.00240).
 * Gregg, W. W., & Rousseaux, C. S. (2017). Simulating PACE Global Ocean Radiances. Frontiers in Marine Science, 4. doi: [10.3389/fmars.2017.00060](https://doi.org/10.3389/fmars.2017.00060).
 
-The ocean component currently does not solve upwelling irradiance and therefore is simpler than the version described by Gregg & Rousseaux.
+The ocean component does not currently resolve upwelling irradiance and therefore is simpler than the version described by Gregg & Rousseaux.
 
 ## Publications
 
