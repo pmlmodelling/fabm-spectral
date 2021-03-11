@@ -1,6 +1,6 @@
 This is a [FABM](https://fabm.net) implementation of the Ocean-Atmosphere Spectral Irradiance Model (OASIM), which simulates the propagation of spectrally resolved direct and diffuse irradiance in atmosphere and oceans. The spectral range of the model is configurable and can include any wavelength between 200 and 4000 nm. Thus it can include total shortwave, ultraviolet, and photosynthetically active radiation, among others.
 
-This implementation is designed for *online coupling* to hydrodynamic-biogechemical models through FABM. Both atmosphere and ocean components run online as part of the coupled simulation and are directly forced by bulk meteorological properties. The modelled underwater irrradiance can drive biogeochemical processes and, in turn, biogeochemical variables can affect (spectrally resolved) light absorption and scattering. The model also calculates light absorption per water layer, which can be fed back to the physical model as a heating term.
+This implementation is designed for *online coupling* to hydrodynamic-biogeochemical models through FABM. Both atmosphere and ocean components run online as part of the coupled simulation and are directly forced by bulk meteorological properties. The modelled underwater irradiance can drive biogeochemical processes and, in turn, biogeochemical variables can affect (spectrally resolved) light absorption and scattering. The model also calculates light absorption per water layer, which can be fed back to the physical model as a heating term.
 
 ## How to use
 
