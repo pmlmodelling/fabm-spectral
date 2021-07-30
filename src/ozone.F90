@@ -32,7 +32,8 @@ contains
       call self%register_dependency(self%id_yearday, standard_variables%number_of_days_since_start_of_the_year)
 
       call self%register_diagnostic_variable(self%id_O3, 'O3', 'kg m-2', 'atmospheric ozone', &
-        standard_variable=type_horizontal_standard_variable('atmosphere_mass_content_of_ozone', 'kg m-2'))
+        standard_variable=type_horizontal_standard_variable('atmosphere_mass_content_of_ozone', 'kg m-2'), &
+        source=source_do_surface)
    end subroutine
    
    subroutine do_surface(self, _ARGUMENTS_DO_SURFACE_)
