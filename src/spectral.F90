@@ -32,7 +32,7 @@ module fabm_spectral
       type (type_global_dependency_id) :: id_yearday
       type (type_dependency_id) :: id_h
       integer :: nlambda
-      type (type_horizontal_diagnostic_variable_id), dimension(:), allocatable :: id_surface_band_dir, id_surface_band_dif
+      type (type_horizontal_diagnostic_variable_id), dimension(:), allocatable :: id_surface_band_dir, id_surface_band_dif, id_R_a , id_R
       type (type_diagnostic_variable_id), dimension(:), allocatable :: id_band_dir, id_band_dif, id_a_band, id_b_band, id_Kd
       type (type_diagnostic_variable_id), dimension(:,:), allocatable :: id_a_iop
       real(rk), dimension(:), allocatable :: lambda, lambda_bounds, par_weights, par_E_weights, swr_weights, uv_weights, F, lambda_out
@@ -340,6 +340,8 @@ contains
          allocate(self%id_a_iop(size(self%lambda_out), size(self%iops)))
          allocate(self%id_a_band(size(self%lambda_out)))
          allocate(self%id_b_band(size(self%lambda_out)))
+         allocate(self%id_R_a(size(self%lambda_out)))
+         allocate(self%id_R(size(self%lambda_out)))
          if (self%save_Kd) allocate(self%id_Kd(size(self%lambda_out)))
          do l = 1, size(self%lambda_out)
             if (self%lambda_out(l) < 1000._rk) then
@@ -359,6 +361,11 @@ contains
             end do
             call self%register_diagnostic_variable(self%id_a_band(l), 'a_band' // trim(strindex), 'm-1', 'total absorption excluding water @ ' // trim(strwavelength) // ' nm', source=source_do_column)
             call self%register_diagnostic_variable(self%id_b_band(l), 'b_band' // trim(strindex), 'm-1', 'total scattering excluding water @ ' // trim(strwavelength) // ' nm', source=source_do_column)
+            !Horizontal refelctance (albedo from surface water)
+            call self%register_diagnostic_variable(self%id_R_a(l),     'R_a_band' // trim(strindex),     '-',      'fraction of total radiation reflecting off surface (albedo) @ ' // trim(strwavelength) // ' nm',         source=source_do_column)
+
+           !Horizontal upwelling refelctance 
+             call self%register_diagnostic_variable(self%id_R(l),     'R_band' // trim(strindex),     '-',      'fraction of total radiation before albedo upwelling (reflecting) at surface @ ' // trim(strwavelength) // ' nm',         source=source_do_column)
          end do
       end if
    end subroutine initialize
@@ -373,6 +380,8 @@ contains
       real(rk), parameter :: r_e = (10._rk + 11.8_rk) / 2 ! Equivalent radius of cloud drop size distribution (um) based on mean of Kiehl et al. & Han et al. (cf OASIM)
       real(rk), parameter :: mcosthetas = 0.831_rk        ! Mean of cosine of angle of diffuse radiation in water, assuming all angular contributions equal in air (Sathyendranath and Platt 1989, p 191) NB Ackleson et al 1994 use 0.9
       real(rk), parameter :: r_s = 1.5_rk                 ! Shape factor representing mean backscatter coefficient of diffuse irradiance (r_d in Ackleson et al. 1994 p 7487)
+      real(rk), parameter :: mcostheta_u = 0.35_rk        !Ackleson et al 1994 
+      real(rk), parameter :: r_u = 3._rk     
 
       real(rk) :: longitude, latitude, yearday, cloud_cover, wind_speed, airpres, relhum, LWP, water_vapour, WV, WM, visibility, AM
       real(rk) :: days, hour, theta, costheta, alpha_a, beta_a
@@ -383,15 +392,19 @@ contains
       real(rk) :: par_J, swr_J, uv_J, par_E, F_a, omega_a
       real(rk), dimension(self%nlambda) :: tau_a, T_a, T_oz, T_w, T_u, T_r, T_aa, T_as
       real(rk), dimension(self%nlambda) :: T_g, T_dclr, T_sclr, T_dcld, T_scld
-      real(rk), dimension(self%nlambda) :: rho_d, rho_s
+      real(rk), dimension(self%nlambda) :: rho_d, rho_s,direct_ba, diffuse_ba, R, R_a, rho_tot
 
       real(rk), dimension(self%nlambda) :: a, b, b_b, a_iop
       real(rk), dimension(self%nlambda) :: f_att_d, f_att_s, f_prod_s
-      real(rk), allocatable :: spectrum_out(:)
+      real(rk), allocatable :: spectrum_out(:) , R_out(:)
       integer :: i_iop
       real(rk) :: c_iop, h, swr_top, costheta_r, dir_frac
 
-      if (self%spectral_output == 2) allocate(spectrum_out(size(self%lambda_out)))
+      if (self%spectral_output == 2) then 
+         allocate(spectrum_out(size(self%lambda_out)))
+         allocate(R_out(size(self%lambda_out)))
+        ! allocate(R_a(size(self%lambda_out)))
+       end if
 
       _GET_HORIZONTAL_(self%id_lon, longitude)
       _GET_HORIZONTAL_(self%id_lat, latitude)
@@ -488,6 +501,10 @@ contains
       diffuse = self%exter * costheta * T_g * ((1._rk - cloud_cover) * T_sclr + cloud_cover * T_scld)
 
       spectrum = direct + diffuse
+
+      direct_ba = direct
+      diffuse_ba = diffuse
+
       par_J = sum(self%par_weights * spectrum)
       swr_J = sum(self%swr_weights * spectrum)
       par_E = sum(self%par_E_weights * spectrum)
@@ -520,9 +537,31 @@ contains
       ! Sea surface reflectance
       call reflectance(self%nlambda, self%F, theta, wind_speed, rho_d, rho_s, costheta_r)
 
+      !Calulate amount  of light that is reflected due to albedo
+      rho_tot = (rho_d*direct + rho_s*diffuse) !/(direct+diffuse)
+
+      select case (self%spectral_output)
+      
+      case (1)
+         do l = 1, self%nlambda
+            _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R_a(l), rho_tot(l))
+         end do
+         
+      case (2)
+      call interp(self%nlambda, self%lambda, rho_tot, size(self%lambda_out), self%lambda_out, spectrum_out)
+      do l = 1, size(self%lambda_out)
+         _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R_a(l), spectrum_out(l))
+      end do
+     end select
+
+    !  write(*,*) 'rho_tot', rho_tot
+
       ! Incorporate the loss due to reflectance
       direct = direct * (1._rk - rho_d)
       diffuse = diffuse * (1._rk - rho_s)
+      
+
+      
       spectrum = direct + diffuse
 
       par_J = sum(self%par_weights * spectrum)
@@ -533,6 +572,9 @@ contains
       _SET_HORIZONTAL_DIAGNOSTIC_(self%id_par_E_sf_w,par_E) ! Photosynthetically Active Radiation (umol/m2/s)
       _SET_HORIZONTAL_DIAGNOSTIC_(self%id_swr_sf_w,  swr_J) ! Total shortwave radiation (W/m2) [up to 4000 nm]
       _SET_HORIZONTAL_DIAGNOSTIC_(self%id_uv_sf_w, uv_J)    ! UV (W/m2)
+
+      !Variables so can get diagnosic at surface - copies format in FABM_MEDUSA_ccd module
+       depthb = 0._rk
 
       _DOWNWARD_LOOP_BEGIN_
          ! Save downwelling shortwave flux at top of the layer
@@ -581,6 +623,38 @@ contains
             end do
          end if
 
+         !Add in diagnostic for upwelling radiation at surface  -ONLY surface layer
+         if (depthb == 0._rk) then
+             ! Transmissivity of direct/diffuse attentuation and conversion from direct to diffuse - for one half of the layer
+             Cd = (a + b)  / costheta_r        ! Gregg & Rousseau 2016 Eq 8 !Cd
+             Cs = (a + r_s * b_b)  / mcosthetas ! Gregg & Rousseau 2016 Eq 9 !Cs
+             Fd = b  / costheta_r     ! Hpo - used different equation to above code? ! Gregg & Rousseau 2016 Eq 14 but not accounting for backscattered fraction !Fd ? can't relate to eq.14
+         
+             Bs=  r_s * b_b/mcosthetas
+             Cu = a +r_u*b_b / mcostheta_u
+             Bd= b_b / costheta_r
+             Bd=min(Bd, Fd*Bs/(Cu+ Cs) )    !Check with Jozef Need to re think
+             !Tu1= Fd/(Cu+ Cd ) * Bs/(Cu+ Cs ) - Bd/ (Cu+ Cd )
+             Tu1 = -(1/(Cs-Cd))*(((Bd*Cs-Bd*Cd-Bs*Fd)/(Cu+Cd)) + ((Bs*Fd/(Cu+Cs))))
+             Tu2 = Bs/(Cu+ Cs )
+             R = (Tu1 *direct + Tu2*diffuse + rho_tot )/(direct_ba + diffuse_ba)
+             select case (self%spectral_output)
+      
+              case (1)
+              do l = 1, self%nlambda
+                  _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R(l), R(l))
+              end do
+         
+            case (2)
+             call interp(self%nlambda, self%lambda, R, size(self%lambda_out), self%lambda_out, R_out)
+             do l = 1, size(self%lambda_out)
+                _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R(l), R_out(l))
+             end do
+           end select
+        end if   
+          
+        depthb = depthb +  h
+  
          ! From top to centre of layer
          direct = direct * f_att_d
          diffuse = diffuse * f_att_s + direct * f_prod_s
