@@ -21,6 +21,7 @@ module fabm_spectral
       real(rk), dimension(:), allocatable :: a  ! specific absorption (m-1 concentration-1)
       real(rk), dimension(:), allocatable :: b  ! specific total scattering (m-1 concentration-1)
       real(rk) :: b_b                           ! ratio of backscattering to total scattering (dimensionless)
+      real(rk) :: iop_type
    end type
 
    type,extends(type_particle_model), public :: type_spectral
@@ -33,9 +34,9 @@ module fabm_spectral
       type (type_dependency_id) :: id_h
       integer :: nlambda
       type (type_horizontal_diagnostic_variable_id), dimension(:), allocatable :: id_surface_band_dir, id_surface_band_dif
-      type (type_diagnostic_variable_id), dimension(:), allocatable :: id_band_dir, id_band_dif, id_a_band, id_b_band, id_Kd
+      type (type_diagnostic_variable_id), dimension(:), allocatable :: id_band_dir, id_band_dif, id_a_band, id_b_band, id_Kd, id_abs_cdom_E
       type (type_diagnostic_variable_id), dimension(:,:), allocatable :: id_a_iop
-      real(rk), dimension(:), allocatable :: lambda, lambda_bounds, par_weights, par_E_weights, swr_weights, uv_weights, F, lambda_out
+      real(rk), dimension(:), allocatable :: lambda, lambda_bounds, par_weights, par_E_weights, swr_weights, uv_weights, F, lambda_out, cdom_abs_E_weights, cdom_abs_weights
       real(rk), dimension(:), allocatable :: exter
       real(rk), dimension(:), allocatable :: a_o, a_u, a_v, tau_r
       real(rk), dimension(:), allocatable :: a_w, b_w, a_w_out, b_w_out
@@ -118,11 +119,17 @@ contains
 
       call self%get_parameter(n_iop, 'n_iop', '', 'number of inherent optical properties (IOPs)', default=0)
       allocate(self%iops(n_iop))
+      allocate(self%id_abs_cdom_E(n_iop))
       do i_iop = 1, n_iop
          allocate(self%iops(i_iop)%a(self%nlambda))
          allocate(self%iops(i_iop)%b(self%nlambda))
+       !  allocate(self%iops(i_iop)%iop_type(1))
+         
          write(strindex, '(i0)') i_iop
          call self%get_parameter(iop_type, 'iop'//trim(strindex)//'_type', '', 'type of IOP '//trim(strindex)//' (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)', minimum=1, maximum=9)
+         self%iops(i_iop)%iop_type=iop_type
+         call self%register_diagnostic_variable(self%id_abs_cdom_E(i_iop),      'abs_cdom_E'//trim(strindex),      'mmolC/m3/s',      'absorbed quanta by CDOC', source=source_do_column)
+         
          select case (iop_type)
          case (1) ! diatoms
             call interp(size(lambda_diatoms), lambda_diatoms, a_diatoms, self%nlambda, self%lambda, self%iops(i_iop)%a)
@@ -206,11 +213,16 @@ contains
       allocate(self%swr_weights(self%nlambda))
       allocate(self%uv_weights(self%nlambda))
       allocate(self%par_E_weights(self%nlambda))
+      allocate(self%cdom_abs_weights(self%nlambda))
+      allocate(self%cdom_abs_E_weights(self%nlambda))
       call calculate_integral_weights(400._rk, 700._rk, self%nlambda, self%lambda, self%par_weights)
       call calculate_integral_weights(300._rk, 4000._rk, self%nlambda, self%lambda, self%swr_weights)
       call calculate_integral_weights(300._rk, 400._rk, self%nlambda, self%lambda, self%uv_weights)
+      call calculate_integral_weights(200._rk, 800._rk, self%nlambda, self%lambda, self%cdom_abs_weights) !range from Gregg and Rousseaux
+      
       self%par_E_weights(:) = self%par_weights * self%lambda /(Planck*lightspeed)/Avogadro*1e-3_rk ! divide by 1e9 to go from nm to m, multiply by 1e6 to go from mol to umol
-
+      self%cdom_abs_E_weights(:) = self%cdom_abs_weights * self%lambda /(Planck*lightspeed)/Avogadro*1e-3_rk ! divide by 1e9 to go from nm to m, multiply by 1e6 to go from mol to umol
+      
       call self%register_dependency(self%id_lon, standard_variables%longitude)
       call self%register_dependency(self%id_lat, standard_variables%latitude)
       call self%register_dependency(self%id_wind_speed, standard_variables%wind_speed)
@@ -595,7 +607,22 @@ contains
          _SET_DIAGNOSTIC_(self%id_swr,  swr_J)  ! Total shortwave radiation (W/m2) [up to 4000 nm]
          _SET_DIAGNOSTIC_(self%id_uv, uv_J)     ! UV (W/m2)
          _SET_DIAGNOSTIC_(self%id_par_E_dif, sum(self%par_E_weights * diffuse)) ! Diffuse Photosynthetically Active photon flux (umol/m2/s)
-
+         
+         do i_iop = 1, size(self%iops)
+            if (self%iops(i_iop)%iop_type==8) then
+                _GET_(self%iops(i_iop)%id_c, c_iop)
+                a_iop = c_iop * self%iops(i_iop)%a
+                if (i_iop==9) then
+                 !   write (*,*) 'i_iop',i_iop
+                 !   write (*,*) 'abs_cdom_spectral', sum(self%cdom_abs_E_weights * spectrum*a_iop)
+                end if
+                _SET_DIAGNOSTIC_(self%id_abs_cdom_E(i_iop), sum(self%cdom_abs_E_weights * spectrum*a_iop)) ! 
+            else
+                _SET_DIAGNOSTIC_(self%id_abs_cdom_E(i_iop), 0._rk) 
+            endif
+         end do
+         
+         
          ! Compute scalar PAR as experienced by phytoplankton
          spectrum = direct / costheta_r + diffuse / mcosthetas
          par_J = sum(self%par_weights * spectrum)
