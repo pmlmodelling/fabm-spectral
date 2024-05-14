@@ -398,7 +398,8 @@ contains
       real(rk), dimension(self%nlambda) :: f_att_d, f_att_s, f_prod_s
       real(rk), allocatable :: spectrum_out(:) , R_out(:)
       integer :: i_iop
-      real(rk) :: c_iop, h, swr_top, costheta_r, dir_frac
+      real(rk) :: c_iop, h, swr_top, costheta_r, dir_frac, depthb
+      real(rk), dimension(self%nlambda) :: Cd, Cs, Fd, Bs, Cu, Bd, Tu1, Tu2
 
       if (self%spectral_output == 2) then 
          allocate(spectrum_out(size(self%lambda_out)))
