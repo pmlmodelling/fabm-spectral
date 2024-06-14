@@ -1,29 +1,48 @@
 check_conservation: false
-require_initialization: true
 instances:
-  light:
-    model: spectral/spectral
+  light_atm:
+    model: spectral/atmosphere
     parameters:
-      lambda_method: 1                                     # choice of wavebands (0: custom range, 1: OASIM), default = 1
-      n_iop: 10                                            # number of inherent optical properties (IOPs), default = 0
-      iop1_type: 1                                         # type of IOP 1 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
-      iop2_type: 2                                         # type of IOP 2 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
-      iop3_type: 3                                         # type of IOP 3 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
-      iop4_type: 5                                         # type of IOP 4 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
-      iop5_type: 6                                         # type of IOP 5 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
-      iop6_type: 6                                         # type of IOP 6 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
-      iop7_type: 6                                         # type of IOP 7 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
-      iop8_type: 8                                         # type of IOP 8 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
-      iop9_type: 8                                         # type of IOP 9 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
-      iop10_type: 8                                        # type of IOP 10 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
-      spectral_output: 2                                   # spectral output (0: none, 1: full, 2: selected wavelengths), default = 0
-      nlambda_out: 6                                       # number of wavebands for spectral output
-      lambda1_out: 412.0                                   # output wavelength 1
-      lambda2_out: 443.0                                   # output wavelength 2
-      lambda3_out: 490.0                                   # output wavelength 3
-      lambda4_out: 510.0                                   # output wavelength 4
-      lambda5_out: 555.0                                   # output wavelength 5
-      lambda6_out: 665.0                                   # output wavelength 6
+      lambda_method: 1
+      compute_mean_wind: true
+      spectral_output: 2
+      nlambda_out: 9
+      lambda1_out: 412
+      lambda2_out: 442
+      lambda3_out: 490
+      lambda4_out: 510
+      lambda5_out: 560
+      lambda6_out: 620
+      lambda7_out: 665
+      lambda8_out: 681
+      lambda9_out: 705
+  light_wat:
+    model: spectral/underwater
+    parameters:
+      lambda_method: 1
+      n_iop: 10
+      iop1_type: 1
+      iop2_type: 2
+      iop3_type: 3
+      iop4_type: 5
+      iop5_type: 6
+      iop6_type: 6
+      iop7_type: 6
+      iop8_type: 8
+      iop9_type: 8
+      iop10_type: 8
+      spectral_output: 2
+      nlambda_out: 9
+      lambda1_out: 412
+      lambda2_out: 442
+      lambda3_out: 490
+      lambda4_out: 510
+      lambda5_out: 560
+      lambda6_out: 620
+      lambda7_out: 665
+      lambda8_out: 681
+      lambda9_out: 705
+      save_Kd: true
     coupling:
       iop1: P1
       iop2: P2
@@ -35,6 +54,7 @@ instances:
       iop8: R1
       iop9: R2
       iop10: R3
+      costheta_r: light_atm/costheta_r
   relhum:
     model: spectral/relhum
   viz:

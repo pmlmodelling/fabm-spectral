@@ -1,10 +1,22 @@
 check_conservation: false
-require_initialization: true
 instances:
-  light:
-    model: spectral/spectral
+  light_atm:
+    model: spectral/atmosphere
     parameters:
-      lambda_method: 1                                     # choice of wavebands (0: custom range, 1: OASIM), default = 1
+      lambda_method: 1
+      compute_mean_wind: false                             # compute daily mean wind speed internally, default = true
+      spectral_output: 2                                   # spectral output (0: none, 1: full, 2: selected wavelengths), default = 0
+      nlambda_out: 6                                       # number of wavebands for spectral output
+      lambda1_out: 412.0                                   # output wavelength 1
+      lambda2_out: 443.0                                   # output wavelength 2
+      lambda3_out: 490.0                                   # output wavelength 3
+      lambda4_out: 510.0                                   # output wavelength 4
+      lambda5_out: 555.0                                   # output wavelength 5
+      lambda6_out: 665.0                                   # output wavelength 6
+  light_wat:
+    model: spectral/underwater
+    parameters:
+      lambda_method: 1
       n_iop: 11                                            # number of inherent optical properties (IOPs), default = 0
       iop1_type: 1                                         # type of IOP 1 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
       iop2_type: 2                                         # type of IOP 2 (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)
@@ -21,7 +33,6 @@ instances:
       lambda_b_iop11: 555.0                                # reference wavelength for scattering by IOP 11 (nm)
       eta_iop11: 0.5                                       # exponent of scattering spectrum for IOP 11 (-)
       b_b_iop11: 0.01756                                   # backscattering-to-total-scattering ratio for IOP 11 (-)
-      compute_mean_wind: false                             # compute daily mean wind speed internally, default = true
       spectral_output: 2                                   # spectral output (0: none, 1: full, 2: selected wavelengths), default = 0
       nlambda_out: 6                                       # number of wavebands for spectral output
       lambda1_out: 412.0                                   # output wavelength 1
@@ -42,10 +53,13 @@ instances:
       iop9: R2
       iop10: R3
       iop11: BB555
+      costheta_r: light_atm/costheta_r
   BB555:
     model: ersem/pelagic_base
     parameters:
       composition: c                                       # elemental composition
+    initialization:
+      c: 0.0
   BB555_obs_3D:
     model: column_projection
   BB_relax:

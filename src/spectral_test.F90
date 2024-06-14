@@ -1,6 +1,6 @@
 module spectral_test
    use iso_c_binding, only: c_double
-   use fabm_spectral
+   use fabm_spectral_atmosphere
    use fabm_types, only: rk
 
    implicit none

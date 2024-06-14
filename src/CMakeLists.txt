@@ -1,6 +1,8 @@
 add_library(fabm_models_spectral OBJECT
             spectral_model_library.F90
-            spectral.F90
+            atmosphere.F90
+            underwater.F90
+            shared.F90
             ozone.F90
             relhum.F90
            )

@@ -2,7 +2,8 @@ module spectral_model_library
 
    use fabm_types, only: type_base_model_factory,type_base_model
 
-   use fabm_spectral
+   use fabm_spectral_atmosphere
+   use fabm_spectral_underwater
    use fabm_ozone
    use fabm_relhum
 
@@ -25,7 +26,8 @@ contains
       class (type_base_model),pointer :: model
 
       select case (name)
-         case ('spectral'); allocate(type_spectral::model)
+         case ('atmosphere'); allocate(type_spectral_atmosphere::model)
+         case ('underwater'); allocate(type_spectral_underwater::model)
          case ('ozone'); allocate(type_ozone::model)
          case ('relhum'); allocate(type_relhum::model)
          ! Add new models here

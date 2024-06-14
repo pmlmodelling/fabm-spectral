@@ -1,12 +1,16 @@
 instances:
-  light:
-    model: spectral/spectral
+  light_atm:
+    model: spectral/atmosphere
     parameters:
-      lambda_method: 1                                               # choice of wavebands (0: custom range, 1: OASIM), default = 1
-      #nlambda: 50                                                    # number of wavebands
-      #lambda_min: 400.0                                              # minimum wavelength (nm)
-      #lambda_max: 700.0                                              # maximum wavelength (nm)
-      spectral_output: 1                                             # spectral output (0: none, 1: full, 2: selected wavelengths), default = 0
+      lambda_method: 1
+      compute_mean_wind: true
+  light_wat:
+    model: spectral/underwater
+    parameters:
+      lambda_method: 1
+      spectral_output: 1
+    coupling:
+      costheta_r: light_atm/costheta_r
   relhum:
     model: spectral/relhum
   #lwp:
