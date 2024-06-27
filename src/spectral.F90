@@ -634,10 +634,10 @@ contains
              Bs=  r_s * b_b/mcosthetas
              Cu = a +r_u*b_b / mcostheta_u
              Bd= b_b / costheta_r
-             Bd=min(Bd, Fd*Bs/(Cu+ Cs) )    !Check with Jozef Need to re think
+            ! Bd=min(Bd, Fd*Bs/(Cu+ Cs) )    !Check with Jozef Need to re think
              !Tu1= Fd/(Cu+ Cd ) * Bs/(Cu+ Cs ) - Bd/ (Cu+ Cd )
-             Tu1 = -(1/(Cs-Cd))*(((Bd*Cs-Bd*Cd-Bs*Fd)/(Cu+Cd)) + ((Bs*Fd/(Cu+Cs))))
-             Tu2 = Bs/(Cu+ Cs )
+             Tu1 = -(1/(Cs-Cd))*(((Bd*Cd-Bd*Cs-Bs*Fd)/(Cu+Cd)) + ((Bs*Fd/(Cu+Cs)))) !Eq 12 in Jozef's notes
+             Tu2 = Bs/(Cu+ Cs ) !Eq. 13 in Jozef's notes
              R = (Tu1 *direct + Tu2*diffuse + rho_tot )/(direct_ba + diffuse_ba)
              select case (self%spectral_output)
       
