@@ -246,8 +246,8 @@ contains
          write(strindex, '(i0)') l
          call self%register_dependency(self%id_direct_sf(l), 'direct_band' // trim(strindex), 'W/m2/nm', 'downward direct irradiance in water @ ' // trim(strwavelength) // ' nm')
          call self%register_dependency(self%id_diffuse_sf(l), 'diffuse_band' // trim(strindex), 'W/m2/nm', 'downward diffuse irradiance in water @ ' // trim(strwavelength) // ' nm')
-         call self%request_coupling(self%id_direct_sf(l), type_surface_standard_variable('downward_direct_irradiance_in_water_at_' // trim(strwavelength) // '_nm', 'W m-2 nm-1'))
-         call self%request_coupling(self%id_diffuse_sf(l), type_surface_standard_variable('downward_diffuse_irradiance_in_water_at_' // trim(strwavelength) // '_nm', 'W m-2 nm-1'))
+         call self%request_coupling(self%id_direct_sf(l),  type_surface_standard_variable(name='downward_direct_irradiance_in_water_at_' // trim(strwavelength) // '_nm', units='W m-2 nm-1'))
+         call self%request_coupling(self%id_diffuse_sf(l), type_surface_standard_variable(name='downward_diffuse_irradiance_in_water_at_' // trim(strwavelength) // '_nm', units='W m-2 nm-1'))
       end do
       call self%register_dependency(self%id_costheta_r, 'costheta_r', '-', 'cosine of zenith angle of underwater direct irradiance')
    end subroutine initialize

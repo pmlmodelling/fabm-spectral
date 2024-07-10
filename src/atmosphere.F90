@@ -224,8 +224,8 @@ contains
          else
             write(strwavelength, '(f6.1)') self%lambda(l)
          end if
-         call self%register_diagnostic_variable(self%id_direct(l), 'direct_band' // trim(strindex), 'W/m2/nm', 'downward direct irradiance in water @ ' // trim(strwavelength) // ' nm', standard_variable=type_surface_standard_variable('downward_direct_irradiance_in_water_at_' // trim(strwavelength) // '_nm', 'W m-2 nm-1'))
-         call self%register_diagnostic_variable(self%id_diffuse(l), 'diffuse_band' // trim(strindex), 'W/m2/nm', 'downward diffuse irradiance in water @ ' // trim(strwavelength) // ' nm', standard_variable=type_surface_standard_variable('downward_diffuse_irradiance_in_water_at_' // trim(strwavelength) // '_nm', 'W m-2 nm-1'))
+         call self%register_diagnostic_variable(self%id_direct(l), 'direct_band' // trim(strindex), 'W/m2/nm', 'downward direct irradiance in water @ ' // trim(strwavelength) // ' nm', standard_variable=type_surface_standard_variable(name='downward_direct_irradiance_in_water_at_' // trim(strwavelength) // '_nm', units='W m-2 nm-1'))
+         call self%register_diagnostic_variable(self%id_diffuse(l), 'diffuse_band' // trim(strindex), 'W/m2/nm', 'downward diffuse irradiance in water @ ' // trim(strwavelength) // ' nm', standard_variable=type_surface_standard_variable(name='downward_diffuse_irradiance_in_water_at_' // trim(strwavelength) // '_nm', units='W m-2 nm-1'))
       end do
    end subroutine initialize
 
