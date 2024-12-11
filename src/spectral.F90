@@ -78,6 +78,7 @@ contains
       real(rk) :: lambda_min, lambda_max
       integer :: nlambda_out
       character(len=8) :: strwavelength, strindex, strindex2
+      character(len=12) ::  spm_type
       logical :: compute_mean_wind
       real(rk) :: lambda_ref_iop, a_star_iop, S_iop, b_star_iop, eta_iop, b_b_iop
 
@@ -122,7 +123,7 @@ contains
          allocate(self%iops(i_iop)%a(self%nlambda))
          allocate(self%iops(i_iop)%b(self%nlambda))
          write(strindex, '(i0)') i_iop
-         call self%get_parameter(iop_type, 'iop'//trim(strindex)//'_type', '', 'type of IOP '//trim(strindex)//' (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC, 9: OM with custom absorption/scattering)', minimum=1, maximum=9)
+         call self%get_parameter(iop_type, 'iop'//trim(strindex)//'_type', '', 'type of IOP '//trim(strindex)//' (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC,9: SPM (small inorganic),10: SPM (large inorganic), 11: OM with custom absorption/scattering)', minimum=1, maximum=11)
          select case (iop_type)
          case (1) ! diatoms
             call interp(size(lambda_diatoms), lambda_diatoms, a_diatoms, self%nlambda, self%lambda, self%iops(i_iop)%a)
@@ -162,7 +163,18 @@ contains
             self%iops(i_iop)%a(:) = 2.98e-4_rk * exp(-0.014_rk * (self%lambda - 443_rk)) * 12.0107_rk
             self%iops(i_iop)%b(:) = 0
             self%iops(i_iop)%b_b = 0
-         case (9) ! Custom carbon-specific absorption and total scattering spectra
+         case (9) !SPM (small); large available.  Ignore additional longwave absorption (to check)/ 
+                 !from Gallegos et al. 2011 who referenced Bowers and binding, 2006. 'Small' minerals as from Irish sea.
+                 !NB*1000 converts the SPM from g-1 to kg-1
+            self%iops(i_iop)%a(:) = 0.054_rk * exp(-0.012_rk * (self%lambda - 440_rk)) *1000._rk !* 12.0107_rk * 2.6_rk
+            self%iops(i_iop)%b(:) = 0.80_rk * (555._rk / self%lambda)**0.97_rk *1000._rk!* 12.0107_rk * 2.6_rk
+            self%iops(i_iop)%b_b = 0.04_rk
+         case (10) !SPM (large).  from Gallegos et al. 2011  
+                 !NB*1000 converts the SPM from g-1 to kg-1
+            self%iops(i_iop)%a(:) = 0.024_rk * exp(-0.011_rk * (self%lambda - 440_rk)) *1000._rk !* 12.0107_rk * 2.6_rk
+            self%iops(i_iop)%b(:) = 0.24_rk * (555._rk / self%lambda)**0.22_rk *1000._rk!* 12.0107_rk * 2.6_rk
+            self%iops(i_iop)%b_b = 0.019_rk
+         case (11) ! Custom carbon-specific absorption and total scattering spectra
             ! NB 12.0107 converts from mg-1 to mmol-1
             call self%get_parameter(a_star_iop, 'a_star_iop'//trim(strindex), 'm2/mg C', 'carbon-mass-specific absorption coefficient for IOP '//trim(strindex)//' at reference wavelength', minimum=0._rk, default=0._rk)
             if (a_star_iop /= 0._rk) then
@@ -184,6 +196,10 @@ contains
                self%iops(i_iop)%b_b = 0
             end if
          end select
+         
+      ! Define type of spm so can couple to model: Code from mesozooplankton.F90 module
+         call self%get_parameter(spm_type,'spm'//trim(strindex)//'type','','spm type '//trim(strindex)//'(cohesive, non-cohesive or na)',default='na')
+
 
          ! Protect against negative coefficients caused by extrapolation beyond source spectrum boundaries.
          self%iops(i_iop)%a(:) = max(self%iops(i_iop)%a, 0._rk)
@@ -194,6 +210,15 @@ contains
             ! Phytoplankton: chlorophyll-specific absorption and scattering
             call self%register_dependency(self%iops(i_iop)%id_c, 'iop' // trim(strindex) // '_chl', 'mg Chl m-3', 'chlorophyll in IOP ' // trim(strindex))
             call self%request_coupling_to_model(self%iops(i_iop)%id_c, 'iop' // trim(strindex), type_bulk_standard_variable(name='total_chlorophyll'))
+         else if (iop_type >=9 .and. iop_type <= 10 .and. spm_type == 'cohesive') then 
+     ! else if (iop_type==9) then 
+            !SPM specific absorption and scattering
+            call self%register_dependency(self%iops(i_iop)%id_c, 'iop' // trim(strindex) // '_sics', 'kg m-3', 'mass in IOP ' // trim(strindex))
+            call self%request_coupling_to_model(self%iops(i_iop)%id_c, 'iop' // trim(strindex), type_interior_standard_variable(name='total_mass_concentration_of_suspended_inorganic_cohesive_sediments'))
+         else if (iop_type >=9 .and. iop_type <= 10 .and. spm_type== 'non-cohesive') then 
+            !SPM specific absorption and scattering
+            call self%register_dependency(self%iops(i_iop)%id_c, 'iop' // trim(strindex) // '_sincs', 'mg m-3', 'mass in IOP ' // trim(strindex))
+            call self%request_coupling_to_model(self%iops(i_iop)%id_c, 'iop' // trim(strindex), type_interior_standard_variable(name='total_mass_concentration_of_suspended_inorganic_non_cohesive_sediments'))        
          else
             ! POM/DOM/PIC: carbon-specific absorption and scattering
             call self%register_dependency(self%iops(i_iop)%id_c, 'iop' // trim(strindex) // '_c', 'mmol C m-3', 'carbon in IOP ' // trim(strindex))
