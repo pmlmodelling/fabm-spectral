@@ -44,6 +44,7 @@ module fabm_spectral
       integer :: l490_l
       integer :: spectral_output
       logical :: save_Kd
+      logical :: use_CDOM
    contains
       procedure :: initialize
       procedure :: get_light
@@ -80,8 +81,8 @@ contains
       integer :: nlambda_out
       character(len=8) :: strwavelength, strindex, strindex2
       character(len=12) ::  spm_type
-      logical :: compute_mean_wind
-      real(rk) :: lambda_ref_iop, a_star_iop, S_iop, b_star_iop, eta_iop, b_b_iop
+      logical :: compute_mean_wind, use_CDOM
+      real(rk) :: lambda_ref_iop, a_star_iop, S_iop, b_star_iop, eta_iop, b_b_iop, CDOM_coeff
 
       integer, parameter :: exter_source = 2
 
@@ -168,7 +169,17 @@ contains
          !   self%iops(i_iop)%b_b = 0.01_rk
          case (8) ! CDOC
             ! NB 12.0107 converts from mg-1 to mmol-1
-            self%iops(i_iop)%a(:) = 2.98e-4_rk * exp(-0.014_rk * (self%lambda - 443_rk)) * 12.0107_rk
+            !HP: Absorption coefficent is normalised to total DOC in Gregg & Rousseau 2016 and associated references. Here we are using CDOM so only fraction of that total DOC
+            !The absoprtion coeffient in Alvarez et al. 2023 (based on Dutkiewicz et al., 2015) is two order of magnitudes greater, likely due to this reason (divide total
+            ! absoprtion by CDOM rather than total DOC)
+            call self%get_parameter(use_CDOM, 'use_CDOM', '-', ' ', default = .true. )
+            if (use_CDOM) then
+                ! 
+                call self%get_parameter(CDOM_coeff, 'CDOM_coeff', 'm2 (mg CDOC)-1', 'CDOM coefficient ', default = 0.015_rk) !Default from Alvarez et al. 2023
+                self%iops(i_iop)%a(:) = (CDOM_coeff) * exp(-0.014_rk * (self%lambda - 443_rk)) * 12.0107_rk
+            else
+                self%iops(i_iop)%a(:) = (2.98e-4_rk) * exp(-0.014_rk * (self%lambda - 443_rk)) * 12.0107_rk
+            end if
             self%iops(i_iop)%b(:) = 0
             self%iops(i_iop)%b_b = 0
          case (9) !SPM (small); large available.  Ignore additional longwave absorption (to check)/ 
