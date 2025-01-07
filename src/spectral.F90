@@ -681,7 +681,7 @@ contains
              Fd = b  / costheta_r     ! Hpo - used different equation to above code? ! Gregg & Rousseau 2016 Eq 14 but not accounting for backscattered fraction !Fd ? can't relate to eq.14
          
              Bs=  r_s * b_b/mcosthetas
-             Cu = a +r_u*b_b / mcostheta_u
+             Cu = (a +r_u*b_b) / mcostheta_u
              Bd= b_b / costheta_r
             ! Bd=min(Bd, Fd*Bs/(Cu+ Cs) )    !Check with Jozef Need to re think
              !Tu1= Fd/(Cu+ Cd ) * Bs/(Cu+ Cs ) - Bd/ (Cu+ Cd )
