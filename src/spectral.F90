@@ -678,14 +678,15 @@ contains
              ! Transmissivity of direct/diffuse attentuation and conversion from direct to diffuse - for one half of the layer
              Cd = (a + b)  / costheta_r        ! Gregg & Rousseau 2016 Eq 8 !Cd
              Cs = (a + r_s * b_b)  / mcosthetas ! Gregg & Rousseau 2016 Eq 9 !Cs
-             Fd = b  / costheta_r     ! Hpo - used different equation to above code? ! Gregg & Rousseau 2016 Eq 14 but not accounting for backscattered fraction !Fd ? can't relate to eq.14
-         
+             Fd = (1._rk - b_b/b)*b  / costheta_r     ! Hpo - used different equation to above code? !Assume b_b/b is backscatted to
+             !total scattering ratio. From  Gregg & Rousseau 2016 Eq 14 !Fd ? can't relate to eq.14
+           !  Fd = (1._rk - 0.5_rk)-b  / costheta_r         
              Bs=  r_s * b_b/mcosthetas
              Cu = (a +r_u*b_b) / mcostheta_u
              Bd= b_b / costheta_r
             ! Bd=min(Bd, Fd*Bs/(Cu+ Cs) )    !Check with Jozef Need to re think
-             !Tu1= Fd/(Cu+ Cd ) * Bs/(Cu+ Cs ) - Bd/ (Cu+ Cd )
-             Tu1 = -(1/(Cs-Cd))*(((Bd*Cd-Bd*Cs-Bs*Fd)/(Cu+Cd)) + ((Bs*Fd/(Cu+Cs)))) !Eq 12 in Jozef's notes
+             Tu1= Fd/(Cu+ Cd ) * Bs/(Cu+ Cs ) - Bd/ (Cu+ Cd )
+             !Tu1 = -(1/(Cs-Cd))*(((Bd*Cd-Bd*Cs-Bs*Fd)/(Cu+Cd)) + ((Bs*Fd/(Cu+Cs)))) !Eq 12 in Jozef's notes
              Tu2 = Bs/(Cu+ Cs ) !Eq. 13 in Jozef's notes
              R = (Tu1 *direct + Tu2*diffuse + rho_tot )/(direct_ba + diffuse_ba)
              select case (self%spectral_output)
