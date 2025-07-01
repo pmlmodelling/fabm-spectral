@@ -594,11 +594,11 @@ contains
       
       case (1)
          do l = 1, self%nlambda
-            _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R_a(l), rho_tot(l))
+            _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R_a(l), rho_tot(l)/(direct(l)+diffuse(l)))
          end do
          
       case (2)
-      call interp(self%nlambda, self%lambda, rho_tot, size(self%lambda_out), self%lambda_out, spectrum_out)
+      call interp(self%nlambda, self%lambda, rho_tot/(direct+diffuse), size(self%lambda_out), self%lambda_out, spectrum_out)
       do l = 1, size(self%lambda_out)
          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R_a(l), spectrum_out(l))
       end do
@@ -688,7 +688,9 @@ contains
              Tu1= Fd/(Cu+ Cd ) * Bs/(Cu+ Cs ) - Bd/ (Cu+ Cd )
              !Tu1 = -(1/(Cs-Cd))*(((Bd*Cd-Bd*Cs-Bs*Fd)/(Cu+Cd)) + ((Bs*Fd/(Cu+Cs)))) !Eq 12 in Jozef's notes
              Tu2 = Bs/(Cu+ Cs ) !Eq. 13 in Jozef's notes
-             R = (Tu1 *direct + Tu2*diffuse + rho_tot )/(direct_ba + diffuse_ba)
+            ! R = (Tu1 *direct + Tu2*diffuse + rho_tot )/(direct_ba + diffuse_ba)
+             R = (Tu1 *direct + Tu2*diffuse )/(direct_ba + diffuse_ba)
+             !R = (Tu1 *direct + Tu2*diffuse )/(direct + diffuse)  
              select case (self%spectral_output)
       
               case (1)
