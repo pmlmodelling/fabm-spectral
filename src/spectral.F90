@@ -41,6 +41,8 @@ module fabm_spectral
       real(rk), dimension(:), allocatable :: exter
       real(rk), dimension(:), allocatable :: a_o, a_u, a_v, tau_r
       real(rk), dimension(:), allocatable :: a_w, b_w, a_w_out, b_w_out
+      real(rk),allocatable :: scale_factor_a(:), scale_factor_b(:)
+
       type (type_iop), allocatable :: iops(:)
       integer :: l490_l
       integer :: spectral_output
@@ -83,8 +85,7 @@ contains
       character(len=8) :: strwavelength, strindex, strindex2
       character(len=12) ::  spm_type
       logical :: compute_mean_wind, use_CDOM
-      real(rk) :: lambda_ref_iop, a_star_iop, S_iop, b_star_iop, eta_iop, b_b_iop, CDOM_coeff, scale_factor_a, scale_factor_b
-
+      real(rk) :: lambda_ref_iop, a_star_iop, S_iop, b_star_iop, eta_iop, b_b_iop, CDOM_coeff
       integer, parameter :: exter_source = 2
 
       ! Coefficients for wavelength dependence of foam reflectance (Eqs A11, A12 in Gregg & Casey 2009)
@@ -123,6 +124,8 @@ contains
       call self%get_parameter(n_iop, 'n_iop', '', 'number of inherent optical properties (IOPs)', default=0)
       allocate(self%iops(n_iop))
       allocate(self%id_abs_cdom_E(n_iop))
+      allocate(self%scale_factor_a(n_iop))
+      allocate(self%scale_factor_b(n_iop))
       do i_iop = 1, n_iop
          allocate(self%iops(i_iop)%a(self%nlambda))
          allocate(self%iops(i_iop)%b(self%nlambda))
@@ -130,32 +133,32 @@ contains
          
          write(strindex, '(i0)') i_iop
          call self%get_parameter(iop_type, 'iop'//trim(strindex)//'_type', '', 'type of IOP '//trim(strindex)//' (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC,9: SPM (small inorganic),10: SPM (large inorganic), 11: OM with custom absorption/scattering)', minimum=1, maximum=11)
-         call self%get_parameter(scale_factor_a, 'scale_factor_a'//trim(strindex), '-', 'constant scale factor for absorption spectrum ', default =1.0_rk) !Default to not change anything
-         call self%get_parameter(scale_factor_b, 'scale_factor_b'//trim(strindex), '-', 'constant scale factor for backscattering  spectrum ', default =1.0_rk)
+         call self%get_parameter(self%scale_factor_a(i_iop), 'scale_factor_a'//trim(strindex), '-', 'constant scale factor for absorption spectrum ', default =1.0_rk) !Default to not change anything
+         call self%get_parameter(self%scale_factor_b(i_iop), 'scale_factor_b'//trim(strindex), '-', 'constant scale factor for backscattering  spectrum ', default =1.0_rk)
          
          self%iops(i_iop)%iop_type=iop_type
          call self%register_diagnostic_variable(self%id_abs_cdom_E(i_iop),      'abs_cdom_E'//trim(strindex),      'mmolC/m3/s',      'absorbed quanta by CDOC', source=source_do_column)
          
          select case (iop_type)
          case (1) ! diatoms
-            call interp(size(lambda_diatoms), lambda_diatoms, a_diatoms*scale_factor_a, self%nlambda, self%lambda, self%iops(i_iop)%a)
-            call interp(size(lambda_diatoms), lambda_diatoms, b_diatoms*scale_factor_b, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            call interp(size(lambda_diatoms), lambda_diatoms, a_diatoms, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_diatoms), lambda_diatoms, b_diatoms, self%nlambda, self%lambda, self%iops(i_iop)%b)
             self%iops(i_iop)%b_b = 0.002 ! Gregg & Rousseau 2016 but originally Morel 1988
          case (2) ! chlorophytes
-            call interp(size(lambda_chlorophytes), lambda_chlorophytes, a_chlorophytes*scale_factor_a, self%nlambda, self%lambda, self%iops(i_iop)%a)
-            call interp(size(lambda_chlorophytes), lambda_chlorophytes, b_chlorophytes*scale_factor_b, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            call interp(size(lambda_chlorophytes), lambda_chlorophytes, a_chlorophytes, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_chlorophytes), lambda_chlorophytes, b_chlorophytes, self%nlambda, self%lambda, self%iops(i_iop)%b)
             self%iops(i_iop)%b_b = 0.00071 * 10 ! Note: 10x Ahn et al. 1992 as reported in Gregg & Rousseau 2016
          case (3) ! cyanobacteria
-            call interp(size(lambda_cyanobacteria), lambda_cyanobacteria, a_cyanobacteria*scale_factor_a, self%nlambda, self%lambda, self%iops(i_iop)%a)
-            call interp(size(lambda_cyanobacteria), lambda_cyanobacteria, b_cyanobacteria*scale_factor_b, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            call interp(size(lambda_cyanobacteria), lambda_cyanobacteria, a_cyanobacteria, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_cyanobacteria), lambda_cyanobacteria, b_cyanobacteria, self%nlambda, self%lambda, self%iops(i_iop)%b)
             self%iops(i_iop)%b_b = 0.0032 ! Gregg & Rousseau 2016 but originally Ahn et al. 1992
          case (4) ! coccolithophorids
-            call interp(size(lambda_coccolithophores), lambda_coccolithophores, a_coccolithophores*scale_factor_a, self%nlambda, self%lambda, self%iops(i_iop)%a)
-            call interp(size(lambda_coccolithophores), lambda_coccolithophores, b_coccolithophores*scale_factor_b, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            call interp(size(lambda_coccolithophores), lambda_coccolithophores, a_coccolithophores, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_coccolithophores), lambda_coccolithophores, b_coccolithophores, self%nlambda, self%lambda, self%iops(i_iop)%b)
             self%iops(i_iop)%b_b = 0.00071 * 10 ! Note: 10x Morel 1988 as reported in Gregg & Rousseau 2016
          case (5) ! dinoflagellates
-            call interp(size(lambda_dinoflagellates), lambda_dinoflagellates, a_dinoflagellates*scale_factor_a, self%nlambda, self%lambda, self%iops(i_iop)%a)
-            call interp(size(lambda_dinoflagellates), lambda_dinoflagellates, b_dinoflagellates*scale_factor_b, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            call interp(size(lambda_dinoflagellates), lambda_dinoflagellates, a_dinoflagellates, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_dinoflagellates), lambda_dinoflagellates, b_dinoflagellates, self%nlambda, self%lambda, self%iops(i_iop)%b)
             self%iops(i_iop)%b_b = 0.0029 ! Gregg & Rousseau 2016 but originally Morel 1988
          case (6) ! detritus (small, as described in Gregg & Rousseau 2016)
             ! Parameters below match the small organic detritus parametrization of Gallegos et al. 2011 (table 2) - the latter also offers a parametrizaton for large detritus.
@@ -612,11 +615,11 @@ contains
       
       case (1)
          do l = 1, self%nlambda
-            _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R_a(l), rho_tot(l))
+            _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R_a(l), rho_tot(l)/(direct(l)+diffuse(l)))
          end do
          
       case (2)
-      call interp(self%nlambda, self%lambda, rho_tot, size(self%lambda_out), self%lambda_out, spectrum_out)
+      call interp(self%nlambda, self%lambda, rho_tot/(direct+diffuse), size(self%lambda_out), self%lambda_out, spectrum_out)
       do l = 1, size(self%lambda_out)
          _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R_a(l), spectrum_out(l))
       end do
@@ -654,12 +657,8 @@ contains
          b_b = 0.5_rk * self%b_w
          do i_iop = 1, size(self%iops)
             _GET_(self%iops(i_iop)%id_c, c_iop)
-            a_iop = c_iop * self%iops(i_iop)%a
-
-            a = a + a_iop
-            b = b + c_iop * self%iops(i_iop)%b
-            b_iop = c_iop * self%iops(i_iop)%b
-            b_b = b_b + c_iop * self%iops(i_iop)%b_b * self%iops(i_iop)%b
+            a_iop = c_iop * self%iops(i_iop)%a * self%scale_factor_a(i_iop)
+            b_iop = c_iop * self%iops(i_iop)%b * self%scale_factor_b(i_iop)         
             bb_iop = c_iop * self%iops(i_iop)%b_b * self%iops(i_iop)%b
             select case (self%spectral_output)
             !Save each individual component of spectral signature
@@ -686,8 +685,8 @@ contains
                end do
             end select
             a = a + a_iop
-            b = b + c_iop * self%iops(i_iop)%b
-            b_b = b_b + c_iop * self%iops(i_iop)%b_b * self%iops(i_iop)%b
+            b = b + b_iop
+            b_b = b_b + bb_iop
          end do
 
          ! Transmissivity of direct/diffuse attentuation and conversion from direct to diffuse - for one half of the layer
