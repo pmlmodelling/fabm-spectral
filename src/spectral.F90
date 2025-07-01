@@ -301,7 +301,7 @@ contains
       ! Horizontal downwelling irradiance just below the water surface (AFTER reflection by water surface)
       call self%register_diagnostic_variable(self%id_swr_sf_w,   'swr_sf_w',   'W/m^2',      'downwelling shortwave flux in water',                source=source_do_column)
       call self%register_diagnostic_variable(self%id_uv_sf_w,    'uv_sf_w',    'W/m^2',      'downwelling ultraviolet radiative flux in water',    source=source_do_column)
-      call self%register_diagnostic_variable(self%id_par_sf_w,   'par_sf_w',   'W/m^2',      'downwelling photosynthetic radiative flux in water', source=source_do_column)
+      call self%register_diagnostic_variable(self%id_par_sf_w,   'par_sf_w',   'W/m^2',      'downwelling photosynthetic radiative flux in water', standard_variable=standard_variables%surface_downwelling_photosynthetic_radiative_flux, source=source_do_column)
       call self%register_diagnostic_variable(self%id_par_E_sf_w, 'par_E_sf_w', 'umol/m^2/s', 'downwelling photosynthetic photon flux in water',    source=source_do_column)
 
       ! Scalar downwelling irradiance within the water column
