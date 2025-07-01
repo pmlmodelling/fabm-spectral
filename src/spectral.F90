@@ -34,8 +34,9 @@ module fabm_spectral
       type (type_dependency_id) :: id_h
       integer :: nlambda
       type (type_horizontal_diagnostic_variable_id), dimension(:), allocatable :: id_surface_band_dir, id_surface_band_dif, id_R_a , id_R
-      type (type_diagnostic_variable_id), dimension(:), allocatable :: id_band_dir, id_band_dif, id_a_band, id_b_band, id_Kd, id_abs_cdom_E
-      type (type_diagnostic_variable_id), dimension(:,:), allocatable :: id_a_iop
+      type (type_horizontal_diagnostic_variable_id), dimension(:), allocatable :: id_Tu1, id_Tu2, id_rrs_rough
+      type (type_diagnostic_variable_id), dimension(:), allocatable :: id_band_dir, id_band_dif, id_a_band, id_b_band, id_Kd, id_abs_cdom_E,id_light_spectrum
+      type (type_diagnostic_variable_id), dimension(:,:), allocatable :: id_a_iop,id_b_iop,id_bb_iop
       real(rk), dimension(:), allocatable :: lambda, lambda_bounds, par_weights, par_E_weights, swr_weights, uv_weights, F, lambda_out, cdom_abs_E_weights, cdom_abs_weights
       real(rk), dimension(:), allocatable :: exter
       real(rk), dimension(:), allocatable :: a_o, a_u, a_v, tau_r
@@ -82,7 +83,7 @@ contains
       character(len=8) :: strwavelength, strindex, strindex2
       character(len=12) ::  spm_type
       logical :: compute_mean_wind, use_CDOM
-      real(rk) :: lambda_ref_iop, a_star_iop, S_iop, b_star_iop, eta_iop, b_b_iop, CDOM_coeff
+      real(rk) :: lambda_ref_iop, a_star_iop, S_iop, b_star_iop, eta_iop, b_b_iop, CDOM_coeff, scale_factor_a, scale_factor_b
 
       integer, parameter :: exter_source = 2
 
@@ -129,30 +130,32 @@ contains
          
          write(strindex, '(i0)') i_iop
          call self%get_parameter(iop_type, 'iop'//trim(strindex)//'_type', '', 'type of IOP '//trim(strindex)//' (1: diatoms, 2: chlorophytes, 3: cyanobacteria, 4: coccolithophorids, 5: dinoflagellates, 6: detritus, 8: CDOC,9: SPM (small inorganic),10: SPM (large inorganic), 11: OM with custom absorption/scattering)', minimum=1, maximum=11)
+         call self%get_parameter(scale_factor_a, 'scale_factor_a'//trim(strindex), '-', 'constant scale factor for absorption spectrum ', default =1.0_rk) !Default to not change anything
+         call self%get_parameter(scale_factor_b, 'scale_factor_b'//trim(strindex), '-', 'constant scale factor for backscattering  spectrum ', default =1.0_rk)
          
          self%iops(i_iop)%iop_type=iop_type
          call self%register_diagnostic_variable(self%id_abs_cdom_E(i_iop),      'abs_cdom_E'//trim(strindex),      'mmolC/m3/s',      'absorbed quanta by CDOC', source=source_do_column)
          
          select case (iop_type)
          case (1) ! diatoms
-            call interp(size(lambda_diatoms), lambda_diatoms, a_diatoms, self%nlambda, self%lambda, self%iops(i_iop)%a)
-            call interp(size(lambda_diatoms), lambda_diatoms, b_diatoms, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            call interp(size(lambda_diatoms), lambda_diatoms, a_diatoms*scale_factor_a, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_diatoms), lambda_diatoms, b_diatoms*scale_factor_b, self%nlambda, self%lambda, self%iops(i_iop)%b)
             self%iops(i_iop)%b_b = 0.002 ! Gregg & Rousseau 2016 but originally Morel 1988
          case (2) ! chlorophytes
-            call interp(size(lambda_chlorophytes), lambda_chlorophytes, a_chlorophytes, self%nlambda, self%lambda, self%iops(i_iop)%a)
-            call interp(size(lambda_chlorophytes), lambda_chlorophytes, b_chlorophytes, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            call interp(size(lambda_chlorophytes), lambda_chlorophytes, a_chlorophytes*scale_factor_a, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_chlorophytes), lambda_chlorophytes, b_chlorophytes*scale_factor_b, self%nlambda, self%lambda, self%iops(i_iop)%b)
             self%iops(i_iop)%b_b = 0.00071 * 10 ! Note: 10x Ahn et al. 1992 as reported in Gregg & Rousseau 2016
          case (3) ! cyanobacteria
-            call interp(size(lambda_cyanobacteria), lambda_cyanobacteria, a_cyanobacteria, self%nlambda, self%lambda, self%iops(i_iop)%a)
-            call interp(size(lambda_cyanobacteria), lambda_cyanobacteria, b_cyanobacteria, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            call interp(size(lambda_cyanobacteria), lambda_cyanobacteria, a_cyanobacteria*scale_factor_a, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_cyanobacteria), lambda_cyanobacteria, b_cyanobacteria*scale_factor_b, self%nlambda, self%lambda, self%iops(i_iop)%b)
             self%iops(i_iop)%b_b = 0.0032 ! Gregg & Rousseau 2016 but originally Ahn et al. 1992
          case (4) ! coccolithophorids
-            call interp(size(lambda_coccolithophores), lambda_coccolithophores, a_coccolithophores, self%nlambda, self%lambda, self%iops(i_iop)%a)
-            call interp(size(lambda_coccolithophores), lambda_coccolithophores, b_coccolithophores, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            call interp(size(lambda_coccolithophores), lambda_coccolithophores, a_coccolithophores*scale_factor_a, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_coccolithophores), lambda_coccolithophores, b_coccolithophores*scale_factor_b, self%nlambda, self%lambda, self%iops(i_iop)%b)
             self%iops(i_iop)%b_b = 0.00071 * 10 ! Note: 10x Morel 1988 as reported in Gregg & Rousseau 2016
          case (5) ! dinoflagellates
-            call interp(size(lambda_dinoflagellates), lambda_dinoflagellates, a_dinoflagellates, self%nlambda, self%lambda, self%iops(i_iop)%a)
-            call interp(size(lambda_dinoflagellates), lambda_dinoflagellates, b_dinoflagellates, self%nlambda, self%lambda, self%iops(i_iop)%b)
+            call interp(size(lambda_dinoflagellates), lambda_dinoflagellates, a_dinoflagellates*scale_factor_a, self%nlambda, self%lambda, self%iops(i_iop)%a)
+            call interp(size(lambda_dinoflagellates), lambda_dinoflagellates, b_dinoflagellates*scale_factor_b, self%nlambda, self%lambda, self%iops(i_iop)%b)
             self%iops(i_iop)%b_b = 0.0029 ! Gregg & Rousseau 2016 but originally Morel 1988
          case (6) ! detritus (small, as described in Gregg & Rousseau 2016)
             ! Parameters below match the small organic detritus parametrization of Gallegos et al. 2011 (table 2) - the latter also offers a parametrizaton for large detritus.
@@ -387,10 +390,16 @@ contains
          allocate(self%id_band_dir(size(self%lambda_out)))
          allocate(self%id_band_dif(size(self%lambda_out)))
          allocate(self%id_a_iop(size(self%lambda_out), size(self%iops)))
+         allocate(self%id_b_iop(size(self%lambda_out), size(self%iops)))
+         allocate(self%id_bb_iop(size(self%lambda_out), size(self%iops)))
          allocate(self%id_a_band(size(self%lambda_out)))
          allocate(self%id_b_band(size(self%lambda_out)))
+         allocate(self%id_light_spectrum(size(self%lambda_out)))
          allocate(self%id_R_a(size(self%lambda_out)))
          allocate(self%id_R(size(self%lambda_out)))
+         allocate(self%id_Tu1(size(self%lambda_out)))
+         allocate(self%id_Tu2(size(self%lambda_out)))
+         allocate(self%id_rrs_rough(size(self%lambda_out)))
          if (self%save_Kd) allocate(self%id_Kd(size(self%lambda_out)))
          do l = 1, size(self%lambda_out)
             if (self%lambda_out(l) < 1000._rk) then
@@ -407,6 +416,8 @@ contains
             do i_iop = 1, size(self%iops)
                write(strindex2, '(i0)') i_iop
                call self%register_diagnostic_variable(self%id_a_iop(l, i_iop), 'a_iop' // trim(strindex2) // '_band' // trim(strindex), '1/m', 'absorption by IOP ' // trim(strindex2) // ' @ ' // trim(strwavelength) // ' nm', source=source_do_column)
+               call self%register_diagnostic_variable(self%id_b_iop(l, i_iop), 'b_iop' // trim(strindex2) // '_band' // trim(strindex), '1/m', 'total scattering by IOP ' // trim(strindex2) // ' @ ' // trim(strwavelength) // ' nm', source=source_do_column)
+               call self%register_diagnostic_variable(self%id_bb_iop(l, i_iop), 'bb_iop' // trim(strindex2) // '_band' // trim(strindex), '1/m', 'backscatter by IOP ' // trim(strindex2) // ' @ ' // trim(strwavelength) // ' nm', source=source_do_column)
             end do
             call self%register_diagnostic_variable(self%id_a_band(l), 'a_band' // trim(strindex), 'm-1', 'total absorption excluding water @ ' // trim(strwavelength) // ' nm', source=source_do_column)
             call self%register_diagnostic_variable(self%id_b_band(l), 'b_band' // trim(strindex), 'm-1', 'total scattering excluding water @ ' // trim(strwavelength) // ' nm', source=source_do_column)
@@ -415,6 +426,10 @@ contains
 
            !Horizontal upwelling refelctance 
              call self%register_diagnostic_variable(self%id_R(l),     'R_band' // trim(strindex),     '-',      'fraction of total radiation before albedo upwelling (reflecting) at surface @ ' // trim(strwavelength) // ' nm',         source=source_do_column)
+             call self%register_diagnostic_variable(self%id_Tu1(l),     'Tu1_band' // trim(strindex),     '-',      'Tu1 @ ' // trim(strwavelength) // ' nm',         source=source_do_column)
+             call self%register_diagnostic_variable(self%id_Tu2(l),     'Tu2_band' // trim(strindex),     '-',      'Tu2 @ ' // trim(strwavelength) // ' nm',         source=source_do_column)
+             call self%register_diagnostic_variable(self%id_rrs_rough(l),     'rrs_rough_band' // trim(strindex),     '-',      'rrs_rough @ ' // trim(strwavelength) // ' -',         source=source_do_column)
+             call self%register_diagnostic_variable(self%id_light_spectrum(l),     'light_spectrum_band' // trim(strindex),     '-',  'light_spectrum @ ' // trim(strwavelength) // ' -',         source=source_do_column)
          end do
       end if
    end subroutine initialize
@@ -443,16 +458,19 @@ contains
       real(rk), dimension(self%nlambda) :: T_g, T_dclr, T_sclr, T_dcld, T_scld
       real(rk), dimension(self%nlambda) :: rho_d, rho_s,direct_ba, diffuse_ba, R, R_a, rho_tot
 
-      real(rk), dimension(self%nlambda) :: a, b, b_b, a_iop
+      real(rk), dimension(self%nlambda) :: a, b, b_b, a_iop, b_iop, bb_iop
       real(rk), dimension(self%nlambda) :: f_att_d, f_att_s, f_prod_s
-      real(rk), allocatable :: spectrum_out(:) , R_out(:)
+      real(rk), allocatable :: spectrum_out(:) , R_out(:), Tu1_out(:), Tu2_out(:), rrs_rough_out(:)
       integer :: i_iop
       real(rk) :: c_iop, h, swr_top, costheta_r, dir_frac, depthb
-      real(rk), dimension(self%nlambda) :: Cd, Cs, Fd, Bs, Cu, Bd, Tu1, Tu2
+      real(rk), dimension(self%nlambda) :: Cd, Cs, Fd, Bs, Cu, Bd, Tu1, Tu2, rrs_rough
 
       if (self%spectral_output == 2) then 
          allocate(spectrum_out(size(self%lambda_out)))
          allocate(R_out(size(self%lambda_out)))
+         allocate(Tu1_out(size(self%lambda_out)))
+         allocate(Tu2_out(size(self%lambda_out)))
+         allocate(rrs_rough_out(size(self%lambda_out)))
         ! allocate(R_a(size(self%lambda_out)))
        end if
 
@@ -637,15 +655,34 @@ contains
          do i_iop = 1, size(self%iops)
             _GET_(self%iops(i_iop)%id_c, c_iop)
             a_iop = c_iop * self%iops(i_iop)%a
+
+            a = a + a_iop
+            b = b + c_iop * self%iops(i_iop)%b
+            b_iop = c_iop * self%iops(i_iop)%b
+            b_b = b_b + c_iop * self%iops(i_iop)%b_b * self%iops(i_iop)%b
+            bb_iop = c_iop * self%iops(i_iop)%b_b * self%iops(i_iop)%b
             select case (self%spectral_output)
+            !Save each individual component of spectral signature
             case (1)
                do l = 1, self%nlambda
                   _SET_DIAGNOSTIC_(self%id_a_iop(l, i_iop), a_iop(l))
+                  _SET_DIAGNOSTIC_(self%id_b_iop(l, i_iop), b_iop(l))
+                  _SET_DIAGNOSTIC_(self%id_bb_iop(l, i_iop),bb_iop(l))
                end do
             case (2)
                call interp(self%nlambda, self%lambda, a_iop, size(self%lambda_out), self%lambda_out, spectrum_out)
                do l = 1, size(self%lambda_out)
                   _SET_DIAGNOSTIC_(self%id_a_iop(l, i_iop), spectrum_out(l))
+               end do
+               
+              call interp(self%nlambda, self%lambda, b_iop, size(self%lambda_out), self%lambda_out, spectrum_out)
+               do l = 1, size(self%lambda_out)
+                  _SET_DIAGNOSTIC_(self%id_b_iop(l, i_iop), spectrum_out(l))
+               end do
+               
+               call interp(self%nlambda, self%lambda, bb_iop, size(self%lambda_out), self%lambda_out, spectrum_out)
+               do l = 1, size(self%lambda_out)
+                  _SET_DIAGNOSTIC_(self%id_bb_iop(l, i_iop), spectrum_out(l))
                end do
             end select
             a = a + a_iop
@@ -675,31 +712,51 @@ contains
 
          !Add in diagnostic for upwelling radiation at surface  -ONLY surface layer
          if (depthb == 0._rk) then
+
+
+             rrs_rough =  b_b/(b_b+a)
+             
              ! Transmissivity of direct/diffuse attentuation and conversion from direct to diffuse - for one half of the layer
              Cd = (a + b)  / costheta_r        ! Gregg & Rousseau 2016 Eq 8 !Cd
              Cs = (a + r_s * b_b)  / mcosthetas ! Gregg & Rousseau 2016 Eq 9 !Cs
              Fd = (1._rk - b_b/b)*b  / costheta_r     ! Hpo - used different equation to above code? !Assume b_b/b is backscatted to
+!             Fd = (a/costheta_r) - Cd
              !total scattering ratio. From  Gregg & Rousseau 2016 Eq 14 !Fd ? can't relate to eq.14
            !  Fd = (1._rk - 0.5_rk)-b  / costheta_r         
              Bs=  r_s * b_b/mcosthetas
              Cu = (a +r_u*b_b) / mcostheta_u
              Bd= b_b / costheta_r
-            ! Bd=min(Bd, Fd*Bs/(Cu+ Cs) )    !Check with Jozef Need to re think
-             Tu1= Fd/(Cu+ Cd ) * Bs/(Cu+ Cs ) - Bd/ (Cu+ Cd )
+           !  Bd=min(Bd, Fd*Bs/(Cu+ Cs) )    !Check with Jozef Need to re think
+!            Tu1= (Fd/(Cu+ Cd )) * (Bs/(Cu+ Cs )) - (Bd/ (Cu+ Cd ))
+
+             Tu1= (Fd/(Cu+ Cd )) * (Bs/(Cu+ Cs )) - (Bd/ (Cu+ Cd ))
+
+           !  write (*,*)'Tu2', Tu2
              !Tu1 = -(1/(Cs-Cd))*(((Bd*Cd-Bd*Cs-Bs*Fd)/(Cu+Cd)) + ((Bs*Fd/(Cu+Cs)))) !Eq 12 in Jozef's notes
-             Tu2 = Bs/(Cu+ Cs ) !Eq. 13 in Jozef's notes
-             R = (Tu1 *direct + Tu2*diffuse + rho_tot )/(direct_ba + diffuse_ba)
+            ! Tu2 = Bs/(Cu+ Cs ) !Eq. 13 in Jozef's notes
+             Tu2 = Bs/(Cu + Cs)
+            ! R = (Tu1 *direct + Tu2*diffuse + rho_tot )/(direct_ba + diffuse_ba)
+             R = (Tu1 *direct + Tu2*diffuse )/(direct_ba + diffuse_ba)
+             !R = (Tu1 *direct + Tu2*diffuse )/(direct + diffuse)  
+
              select case (self%spectral_output)
       
               case (1)
               do l = 1, self%nlambda
                   _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R(l), R(l))
+                  _SET_HORIZONTAL_DIAGNOSTIC_(self%id_Tu1(l), Tu1(l))
               end do
          
             case (2)
              call interp(self%nlambda, self%lambda, R, size(self%lambda_out), self%lambda_out, R_out)
+             call interp(self%nlambda, self%lambda, Tu1, size(self%lambda_out), self%lambda_out, Tu1_out)
+             call interp(self%nlambda, self%lambda, Tu2, size(self%lambda_out), self%lambda_out, Tu2_out)
+             call interp(self%nlambda, self%lambda, rrs_rough, size(self%lambda_out), self%lambda_out, rrs_rough_out)
              do l = 1, size(self%lambda_out)
                 _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R(l), R_out(l))
+                _SET_HORIZONTAL_DIAGNOSTIC_(self%id_Tu1(l), Tu1_out(l))
+                _SET_HORIZONTAL_DIAGNOSTIC_(self%id_Tu2(l), Tu2_out(l))
+                _SET_HORIZONTAL_DIAGNOSTIC_(self%id_rrs_rough (l), rrs_rough_out(l))
              end do
            end select
         end if   
@@ -764,6 +821,10 @@ contains
             call interp(self%nlambda, self%lambda, b, size(self%lambda_out), self%lambda_out, spectrum_out)
             do l = 1, size(self%lambda_out)
                _SET_DIAGNOSTIC_(self%id_b_band(l), spectrum_out(l) - self%b_w_out(l))
+            end do
+            call interp(self%nlambda, self%lambda, spectrum, size(self%lambda_out), self%lambda_out, spectrum_out)
+            do l = 1, size(self%lambda_out)
+               _SET_DIAGNOSTIC_(self%id_light_spectrum(l), spectrum_out(l) )
             end do
             if (self%save_Kd) then
                call interp(self%nlambda, self%lambda, Kd, size(self%lambda_out), self%lambda_out, spectrum_out)
