@@ -25,7 +25,7 @@ module fabm_spectral
    end type
 
    type,extends(type_particle_model), public :: type_spectral
-      type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_par_E_scalar, id_par_J_scalar, id_par_E_dif, id_swr_abs, id_secchi
+      type (type_diagnostic_variable_id) :: id_swr, id_uv, id_par, id_par_E, id_par_E_scalar, id_par_J_scalar, id_par_E_dif, id_swr_abs, id_secchi, id_Kd_par
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf, id_par_sf, id_uv_sf, id_par_E_sf, id_swr_dif_sf, id_mean_wind_out, id_wind_out, id_zen
       type (type_horizontal_diagnostic_variable_id) :: id_swr_sf_w, id_par_sf_w, id_uv_sf_w, id_par_E_sf_w
       type (type_horizontal_diagnostic_variable_id) :: id_alpha_a, id_beta_a, id_omega_a, id_F_a
@@ -392,6 +392,7 @@ contains
          allocate(self%id_R_a(size(self%lambda_out)))
          allocate(self%id_R(size(self%lambda_out)))
          if (self%save_Kd) allocate(self%id_Kd(size(self%lambda_out)))
+         if (self%save_Kd) call self%register_diagnostic_variable(self%id_Kd_par,   'Kd_par',   '1/m', 'attenuaion integrated across PAR wavelengths',    source=source_do_column)
          do l = 1, size(self%lambda_out)
             if (self%lambda_out(l) < 1000._rk) then
                write(strwavelength, '(f5.1)') self%lambda_out(l)
@@ -774,6 +775,9 @@ contains
                end do
             end if
          end select
+         
+         !Save kd integrated across PAR wavebands
+         if (self%save_Kd) _SET_DIAGNOSTIC_(self%id_Kd_par, sum(Kd*self%par_weights))
 
          ! Compute remaining downwelling shortwave flux and from that, absorption [heating]
          swr_J = sum(self%swr_weights * spectrum)
