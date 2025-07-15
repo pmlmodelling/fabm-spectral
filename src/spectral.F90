@@ -459,7 +459,7 @@ contains
       real(rk) :: par_J, swr_J, uv_J, par_E, F_a, omega_a
       real(rk), dimension(self%nlambda) :: tau_a, T_a, T_oz, T_w, T_u, T_r, T_aa, T_as
       real(rk), dimension(self%nlambda) :: T_g, T_dclr, T_sclr, T_dcld, T_scld
-      real(rk), dimension(self%nlambda) :: rho_d, rho_s,direct_ba, diffuse_ba, R, R_a, rho_tot
+      real(rk), dimension(self%nlambda) :: rho_d, rho_s,direct_ba, diffuse_ba, R, R_a, rho_tot, Rrs, crrs
 
       real(rk), dimension(self%nlambda) :: a, b, b_b, a_iop, b_iop, bb_iop
       real(rk), dimension(self%nlambda) :: f_att_d, f_att_s, f_prod_s
@@ -736,18 +736,21 @@ contains
              Tu2 = Bs/(Cu + Cs)
             ! R = (Tu1 *direct + Tu2*diffuse + rho_tot )/(direct_ba + diffuse_ba)
              R = (Tu1 *direct + Tu2*diffuse )/(direct_ba + diffuse_ba)
-             !R = (Tu1 *direct + Tu2*diffuse )/(direct + diffuse)  
-
+             !R = (Tu1 *direct + Tu2*diffuse )/(direct + diffuse)
+           !Following Dutkiewicz et al., 2019  
+             R= (Tu1 *direct + Tu2*diffuse )/(direct + diffuse)
+             Rrs= R/3.0_rk
+             Crrs = (0.53_rk*Rrs)/(1._rk-1.7*Rrs) 
              select case (self%spectral_output)
       
               case (1)
               do l = 1, self%nlambda
-                  _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R(l), R(l))
+                  _SET_HORIZONTAL_DIAGNOSTIC_(self%id_R(l), Crrs(l))
                   _SET_HORIZONTAL_DIAGNOSTIC_(self%id_Tu1(l), Tu1(l))
               end do
          
             case (2)
-             call interp(self%nlambda, self%lambda, R, size(self%lambda_out), self%lambda_out, R_out)
+             call interp(self%nlambda, self%lambda, Crrs, size(self%lambda_out), self%lambda_out, R_out)
              call interp(self%nlambda, self%lambda, Tu1, size(self%lambda_out), self%lambda_out, Tu1_out)
              call interp(self%nlambda, self%lambda, Tu2, size(self%lambda_out), self%lambda_out, Tu2_out)
              call interp(self%nlambda, self%lambda, rrs_rough, size(self%lambda_out), self%lambda_out, rrs_rough_out)
