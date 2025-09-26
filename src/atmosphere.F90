@@ -256,6 +256,8 @@ contains
 
       if (self%spectral_output == 2) allocate(spectrum_out(size(self%lambda_out)))
 
+      _HORIZONTAL_LOOP_BEGIN_
+
       _GET_HORIZONTAL_(self%id_lon, longitude)
       _GET_HORIZONTAL_(self%id_lat, latitude)
       _GET_GLOBAL_(self%id_yearday, yearday)
@@ -403,6 +405,8 @@ contains
       _SET_SURFACE_DIAGNOSTIC_(self%id_par_E_sf_w,par_E) ! Photosynthetically Active Radiation (umol/m2/s)
       _SET_SURFACE_DIAGNOSTIC_(self%id_swr_sf_w,  swr_J) ! Total shortwave radiation (W/m2) [up to 4000 nm]
       _SET_SURFACE_DIAGNOSTIC_(self%id_uv_sf_w, uv_J)    ! UV (W/m2)
+
+      _HORIZONTAL_LOOP_END_
 
    end subroutine do_surface
 
